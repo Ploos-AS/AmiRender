@@ -2,10 +2,14 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
 	"os"
+
+	"github.com/Ploos-AS/AmiRender/internal/engine"
+	"github.com/Ploos-AS/AmiRender/internal/engine/povray"
 )
 
 type Message struct {
@@ -16,7 +20,11 @@ type Message struct {
 type Job struct {
 	ID     string `json:"id"`
 	Engine string `json:"engine"`
+	Scene  string `json:"scene"`
 	Output string `json:"output"`
+	Frame  int    `json:"frame"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
 }
 
 func handle(c net.Conn) {
@@ -29,12 +37,31 @@ func handle(c net.Conn) {
 			continue
 		}
 		var j Job
-		if json.Unmarshal(m.Job, &j) != nil || j.Engine != "null" {
-			fmt.Fprintln(c, `{"type":"FAILED","error":"unsupported engine"}`)
+		if json.Unmarshal(m.Job, &j) != nil {
+			fmt.Fprintln(c, `{"type":"FAILED","error":"bad job"}`)
 			continue
 		}
-		out, _ := json.Marshal(map[string]any{"type": "COMPLETE", "job_id": j.ID, "engine": "null", "output": j.Output})
-		fmt.Fprintln(c, string(out))
+
+		if j.Engine == "null" {
+			out, _ := json.Marshal(map[string]any{"type": "COMPLETE", "job_id": j.ID, "engine": "null", "output": j.Output})
+			fmt.Fprintln(c, string(out))
+			continue
+		}
+		if j.Engine == "povray" {
+			e := povray.New("")
+			result, err := e.Render(context.Background(), engine.Job{
+				ID: j.ID, Scene: j.Scene, Output: j.Output, Frame: j.Frame, Width: j.Width, Height: j.Height,
+			})
+			if err != nil {
+				out, _ := json.Marshal(map[string]any{"type": "FAILED", "job_id": j.ID, "engine": "povray", "error": err.Error()})
+				fmt.Fprintln(c, string(out))
+				continue
+			}
+			out, _ := json.Marshal(map[string]any{"type": "COMPLETE", "job_id": j.ID, "engine": "povray", "output": result.Output})
+			fmt.Fprintln(c, string(out))
+			continue
+		}
+		fmt.Fprintln(c, `{"type":"FAILED","error":"unsupported engine"}`)
 	}
 }
 
@@ -48,7 +75,7 @@ func main() {
 		panic(err)
 	}
 	defer ln.Close()
-	fmt.Printf("AmiRender M0 node listening on %s\n", addr)
+	fmt.Printf("AmiRender node listening on %s\n", addr)
 	for {
 		c, err := ln.Accept()
 		if err != nil {
