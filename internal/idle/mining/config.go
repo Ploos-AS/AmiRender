@@ -1,32 +1,33 @@
 package mining
 
-import (
-	"fmt"
+import "fmt"
 
-	"github.com/Ploos-AS/AmiRender/internal/idle"
-)
-
+// Config describes an owner-supplied external idle workload.
+// AmiRender stores policy and configuration only; execution is delegated
+// outside the render node.
 type Config struct {
+	Enabled    bool
+	Kind       string
 	Executable string
 	Pool       string
 	Wallet     string
-	ExtraArgs  []string
+	CPUPercent int
 }
 
-func Monero(c Config) (idle.Workload, error) {
-	if c.Executable == "" || c.Pool == "" || c.Wallet == "" {
-		return nil, fmt.Errorf("monero requires executable, pool and wallet")
+func (c Config) Validate() error {
+	if !c.Enabled {
+		return nil
 	}
-	args := []string{"-o", c.Pool, "-u", c.Wallet, "--coin", "monero"}
-	args = append(args, c.ExtraArgs...)
-	return idle.NewProcessWorkload("monero", c.Executable, args), nil
-}
-
-func Verus(c Config) (idle.Workload, error) {
-	if c.Executable == "" || c.Pool == "" || c.Wallet == "" {
-		return nil, fmt.Errorf("verus requires executable, pool and wallet")
+	switch c.Kind {
+	case "monero", "verus":
+	default:
+		return fmt.Errorf("unsupported mining workload %q", c.Kind)
 	}
-	args := []string{"-o", c.Pool, "-u", c.Wallet}
-	args = append(args, c.ExtraArgs...)
-	return idle.NewProcessWorkload("verus", c.Executable, args), nil
+	if c.Executable == "" || c.Pool == "" || c.Wallet == "" {
+		return fmt.Errorf("%s requires owner-supplied executable, pool and wallet", c.Kind)
+	}
+	if c.CPUPercent < 1 || c.CPUPercent > 100 {
+		return fmt.Errorf("cpu percent must be between 1 and 100")
+	}
+	return nil
 }
