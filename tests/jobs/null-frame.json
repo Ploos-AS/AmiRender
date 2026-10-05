@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "id": "m0-null-frame-0001",
+  "engine": "null",
+  "scene": "tests/scenes/minimal",
+  "frame": 0,
+  "width": 320,
+  "height": 256,
+  "output": "frame0000.iff",
+  "priority": 50,
+  "engine_options": {}
+}
