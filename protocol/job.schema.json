@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AmiRender Job",
+  "type": "object",
+  "required": ["version", "id", "engine", "scene", "output"],
+  "properties": {
+    "version": { "type": "integer", "const": 1 },
+    "id": { "type": "string", "minLength": 1 },
+    "engine": { "type": "string", "minLength": 1 },
+    "scene": { "type": "string", "minLength": 1 },
+    "frame": { "type": "integer", "minimum": 0 },
+    "width": { "type": "integer", "minimum": 1 },
+    "height": { "type": "integer", "minimum": 1 },
+    "output": { "type": "string", "minLength": 1 },
+    "priority": { "type": "integer", "minimum": 0, "maximum": 100 },
+    "engine_options": { "type": "object", "additionalProperties": true }
+  },
+  "additionalProperties": false
+}
