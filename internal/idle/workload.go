@@ -9,8 +9,8 @@ import (
 var ErrDisabled = errors.New("idle workload disabled")
 
 type Config struct {
-	Enabled   bool
-	IdleDelay time.Duration
+	Enabled    bool
+	IdleDelay  time.Duration
 	CPUPercent int
 }
 
@@ -21,7 +21,7 @@ type Workload interface {
 }
 
 type Manager struct {
-	Config Config
+	Config   Config
 	Workload Workload
 }
 
