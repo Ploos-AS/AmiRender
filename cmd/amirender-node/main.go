@@ -32,19 +32,23 @@ func handle(c net.Conn) {
 			fmt.Fprintln(c, `{"type":"FAILED","error":"unsupported engine"}`)
 			continue
 		}
-		out, _ := json.Marshal(map[string]any{"type":"COMPLETE","job_id":j.ID,"engine":"null","output":j.Output})
+		out, _ := json.Marshal(map[string]any{"type": "COMPLETE", "job_id": j.ID, "engine": "null", "output": j.Output})
 		fmt.Fprintln(c, string(out))
 	}
 }
 
 func main() {
 	ln, err := net.Listen("tcp", "127.0.0.1:6800")
-	if err != nil { panic(err) }
+	if err != nil {
+		panic(err)
+	}
 	defer ln.Close()
 	fmt.Println("AmiRender M0 node listening on 127.0.0.1:6800")
 	for {
 		c, err := ln.Accept()
-		if err != nil { panic(err) }
+		if err != nil {
+			panic(err)
+		}
 		go handle(c)
 	}
 }
