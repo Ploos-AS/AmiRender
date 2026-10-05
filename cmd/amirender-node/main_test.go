@@ -30,13 +30,13 @@ func TestNullEngineEndToEnd(t *testing.T) {
 
 	job := map[string]any{
 		"version": 1,
-		"id": "m0-e2e-0001",
-		"engine": "null",
-		"scene": "minimal",
-		"frame": 0,
-		"width": 320,
-		"height": 256,
-		"output": "frame0000.iff",
+		"id":      "m0-e2e-0001",
+		"engine":  "null",
+		"scene":   "minimal",
+		"frame":   0,
+		"width":   320,
+		"height":  256,
+		"output":  "frame0000.iff",
 	}
 	if err := json.NewEncoder(conn).Encode(map[string]any{"type": "SUBMIT", "job": job}); err != nil {
 		t.Fatal(err)
