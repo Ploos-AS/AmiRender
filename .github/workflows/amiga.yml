@@ -1,0 +1,37 @@
+name: Amiga build
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  amiga-build:
+    runs-on: ubuntu-latest
+    env:
+      AMIGA_DEV_IMAGE: ghcr.io/ploos-as/amiga-dev:edge
+      AMIGA_CPU_PROFILE: "68000"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pull amiga-dev
+        run: docker pull "$AMIGA_DEV_IMAGE"
+      - name: Verify amiga-dev contract
+        run: docker run --rm "$AMIGA_DEV_IMAGE" amiga-check
+      - name: Build AmiRender Amiga client
+        run: |
+          docker run --rm \
+            -e AMIGA_CPU_PROFILE="$AMIGA_CPU_PROFILE" \
+            -v "$PWD:/workspace" \
+            "$AMIGA_DEV_IMAGE" \
+            amiga-build sh -ec 'cd clients/amiga && make clean && make CC=m68k-amigaos-gcc CFLAGS="$AMIGA_CPU_FLAGS -Os -Wall -Wextra -Werror"'
+      - name: Inspect m68k executable
+        run: |
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            "$AMIGA_DEV_IMAGE" \
+            amiga-inspect /workspace/clients/amiga/amirender
+
+# M1 uses :edge as the consumer-integration gate. Pin to a qualified immutable
+# amiga-dev sha-* tag or digest before release qualification.
