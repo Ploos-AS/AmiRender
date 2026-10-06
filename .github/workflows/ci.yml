@@ -25,6 +25,12 @@ jobs:
             clients/amiga/src/submit.c clients/amiga/tests/test_submit.c \
             -o build-amiga-client-test
           ./build-amiga-client-test
+          cc -std=c99 -Wall -Wextra -Werror -pedantic \
+            -Iclients/amiga/include \
+            clients/amiga/src/submit.c clients/amiga/src/client.c \
+            clients/amiga/tests/test_client.c \
+            -o build-amiga-transport-test
+          ./build-amiga-transport-test
       - name: Render POV-Ray smoke scene
         run: |
           mkdir -p build
