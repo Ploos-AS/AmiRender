@@ -3,6 +3,8 @@
 
 #include <stddef.h>
 
+struct amirender_job;
+
 struct amirender_transport {
     void *context;
     int (*send)(void *context, const char *data, size_t length);
