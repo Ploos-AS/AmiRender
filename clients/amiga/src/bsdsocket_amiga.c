@@ -59,7 +59,7 @@ int amirender_bsdsocket_connect(
         return -1;
     }
 
-    entry = gethostbyname((char *)host);
+    entry = (struct hostent *)(void *)gethostbyname((char *)host);
     if (entry == NULL || entry->h_addr_list == NULL || entry->h_addr_list[0] == NULL) {
         CloseLibrary(SocketBase);
         SocketBase = NULL;
