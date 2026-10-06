@@ -29,9 +29,9 @@ func testCoordinator(t *testing.T, engine string) (farm.Coordinator, func()) {
 		t.Fatal(err)
 	}
 	return farm.Coordinator{
-		Registry: r,
+		Registry:  r,
 		Endpoints: map[string]string{"node-01": ln.Addr().String()},
-		Client: farm.TCPWorkerClient{},
+		Client:    farm.TCPWorkerClient{},
 	}, func() { _ = ln.Close() }
 }
 
