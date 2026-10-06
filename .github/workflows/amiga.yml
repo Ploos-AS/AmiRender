@@ -19,13 +19,25 @@ jobs:
         run: docker pull "$AMIGA_DEV_IMAGE"
       - name: Verify amiga-dev contract
         run: docker run --rm "$AMIGA_DEV_IMAGE" amiga-check
-      - name: Build AmiRender Amiga client
+      - name: Build and stage AmiRender Amiga client
         run: |
+          mkdir -p amiga-runtime-payload/C amiga-runtime-payload/S
+          chmod 0777 amiga-runtime-payload/C
+          cp clients/amiga/runtime/amiga-runtime.json amiga-runtime-payload/
+          cp clients/amiga/runtime/run-test amiga-runtime-payload/S/
           docker run --rm \
             -e AMIGA_CPU_PROFILE="$AMIGA_CPU_PROFILE" \
-            -v "$PWD:/workspace" \
+            -v "$PWD:/workspace:ro" \
+            -v "$PWD/amiga-runtime-payload/C:/out" \
             "$AMIGA_DEV_IMAGE" \
-            amiga-build sh -ec 'cd clients/amiga && make clean && make TARGET=/tmp/amirender CC=m68k-amigaos-gcc CFLAGS="$AMIGA_CPU_FLAGS -Os -Wall -Wextra -Werror" && test -s /tmp/amirender && amiga-inspect /tmp/amirender'
+            amiga-build sh -ec 'cd /workspace/clients/amiga && make TARGET=/out/amirender CC=m68k-amigaos-gcc CFLAGS="$AMIGA_CPU_FLAGS -Os -Wall -Wextra -Werror" && test -s /out/amirender && amiga-inspect /out/amirender'
+          test -s amiga-runtime-payload/C/amirender
+      - name: Upload classic runtime payload
+        uses: actions/upload-artifact@v4
+        with:
+          name: amirender-m1-amiga-runtime-payload
+          path: amiga-runtime-payload/
+          if-no-files-found: error
 
 # M1 uses :edge as the consumer-integration gate. Pin to a qualified immutable
 # amiga-dev sha-* tag or digest before release qualification.
