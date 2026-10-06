@@ -25,13 +25,7 @@ jobs:
             -e AMIGA_CPU_PROFILE="$AMIGA_CPU_PROFILE" \
             -v "$PWD:/workspace" \
             "$AMIGA_DEV_IMAGE" \
-            amiga-build sh -ec 'cd clients/amiga && make clean && make TARGET=/tmp/amirender CC=m68k-amigaos-gcc CFLAGS="$AMIGA_CPU_FLAGS -Os -Wall -Wextra -Werror" && cp /tmp/amirender /workspace/amirender-m68k'
-      - name: Inspect m68k executable
-        run: |
-          docker run --rm \
-            -v "$PWD:/workspace" \
-            "$AMIGA_DEV_IMAGE" \
-            amiga-inspect /workspace/amirender-m68k
+            amiga-build sh -ec 'cd clients/amiga && make clean && make TARGET=/tmp/amirender CC=m68k-amigaos-gcc CFLAGS="$AMIGA_CPU_FLAGS -Os -Wall -Wextra -Werror" && test -s /tmp/amirender && amiga-inspect /tmp/amirender'
 
 # M1 uses :edge as the consumer-integration gate. Pin to a qualified immutable
 # amiga-dev sha-* tag or digest before release qualification.
