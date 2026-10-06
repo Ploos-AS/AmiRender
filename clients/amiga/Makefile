@@ -1,4 +1,4 @@
-CC ?= m68k-amigaos-gcc
+CC = m68k-amigaos-gcc
 CFLAGS ?= -O2 -Wall -Wextra
 CPPFLAGS ?= -Iinclude
 TARGET ?= amirender
