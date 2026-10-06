@@ -10,21 +10,12 @@ import (
 
 	"github.com/Ploos-AS/AmiRender/internal/engine"
 	"github.com/Ploos-AS/AmiRender/internal/engine/povray"
+	"github.com/Ploos-AS/AmiRender/internal/farm"
 )
 
 type Message struct {
 	Type string          `json:"type"`
 	Job  json.RawMessage `json:"job"`
-}
-
-type Job struct {
-	ID     string `json:"id"`
-	Engine string `json:"engine"`
-	Scene  string `json:"scene"`
-	Output string `json:"output"`
-	Frame  int    `json:"frame"`
-	Width  int    `json:"width"`
-	Height int    `json:"height"`
 }
 
 func handle(c net.Conn) {
@@ -36,15 +27,16 @@ func handle(c net.Conn) {
 			fmt.Fprintln(c, `{"type":"FAILED","error":"bad request"}`)
 			continue
 		}
-		var j Job
+		var j farm.RenderJob
 		if json.Unmarshal(m.Job, &j) != nil {
 			fmt.Fprintln(c, `{"type":"FAILED","error":"bad job"}`)
 			continue
 		}
 
 		if j.Engine == "null" {
-			out, _ := json.Marshal(map[string]any{"type": "COMPLETE", "job_id": j.ID, "engine": "null", "output": j.Output})
-			fmt.Fprintln(c, string(out))
+			writeResult(c, farm.WorkerResult{
+				Type: "COMPLETE", JobID: j.ID, Engine: "null", Output: j.Output,
+			})
 			continue
 		}
 		if j.Engine == "povray" {
@@ -53,16 +45,24 @@ func handle(c net.Conn) {
 				ID: j.ID, Scene: j.Scene, Output: j.Output, Frame: j.Frame, Width: j.Width, Height: j.Height,
 			})
 			if err != nil {
-				out, _ := json.Marshal(map[string]any{"type": "FAILED", "job_id": j.ID, "engine": "povray", "error": err.Error()})
-				fmt.Fprintln(c, string(out))
+				writeResult(c, farm.WorkerResult{
+					Type: "FAILED", JobID: j.ID, Engine: "povray", Error: err.Error(),
+				})
 				continue
 			}
-			out, _ := json.Marshal(map[string]any{"type": "COMPLETE", "job_id": j.ID, "engine": "povray", "output": result.Output})
-			fmt.Fprintln(c, string(out))
+			writeResult(c, farm.WorkerResult{
+				Type: "COMPLETE", JobID: j.ID, Engine: "povray", Output: result.Output,
+			})
 			continue
 		}
-		fmt.Fprintln(c, `{"type":"FAILED","error":"unsupported engine"}`)
+		writeResult(c, farm.WorkerResult{
+			Type: "FAILED", JobID: j.ID, Engine: j.Engine, Error: "unsupported engine",
+		})
 	}
+}
+
+func writeResult(c net.Conn, result farm.WorkerResult) {
+	_ = json.NewEncoder(c).Encode(result)
 }
 
 func main() {
