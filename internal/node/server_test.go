@@ -3,32 +3,42 @@ package node
 import (
 	"context"
 	"net"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/Ploos-AS/AmiRender/internal/farm"
 )
 
-func TestProductionHandlerNullRoundTrip(t *testing.T) {
+func testCoordinator(t *testing.T, engine string) (farm.Coordinator, func()) {
+	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ln.Close()
 	go func() { _ = Serve(ln) }()
 
 	r := farm.NewRegistry()
 	if err := r.Register(farm.Node{
 		ID: "node-01", Arch: "amd64",
-		Capabilities: []farm.Capability{{Engine: "null"}},
+		Capabilities: []farm.Capability{{Engine: engine}},
 	}); err != nil {
+		ln.Close()
 		t.Fatal(err)
 	}
-	c := farm.Coordinator{
+	return farm.Coordinator{
 		Registry: r,
 		Endpoints: map[string]string{"node-01": ln.Addr().String()},
 		Client: farm.TCPWorkerClient{},
-	}
+	}, func() { _ = ln.Close() }
+}
+
+func TestProductionHandlerNullRoundTrip(t *testing.T) {
+	c, closeServer := testCoordinator(t, "null")
+	defer closeServer()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	result, err := c.Render(ctx, farm.RenderJob{
@@ -39,5 +49,43 @@ func TestProductionHandlerNullRoundTrip(t *testing.T) {
 	}
 	if result.Type != "COMPLETE" || result.JobID != "m1-e2e" || result.Output != "result.dat" {
 		t.Fatalf("unexpected result: %#v", result)
+	}
+}
+
+func TestProductionHandlerPOVRayCreatesPNG(t *testing.T) {
+	if _, err := exec.LookPath("povray"); err != nil {
+		t.Skip("povray not installed")
+	}
+
+	dir := t.TempDir()
+	scene := filepath.Join(dir, "scene.pov")
+	output := filepath.Join(dir, "frame.png")
+	source := `camera { location <0, 0, -3> look_at <0, 0, 0> }
+light_source { <-2, 3, -4> color rgb <1, 1, 1> }
+sphere { <0, 0, 0>, 1 pigment { color rgb <0.7, 0.7, 0.7> } }
+`
+	if err := os.WriteFile(scene, []byte(source), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	c, closeServer := testCoordinator(t, "povray")
+	defer closeServer()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	result, err := c.Render(ctx, farm.RenderJob{
+		ID: "pov-e2e", Engine: "povray", Scene: scene, Output: output, Width: 160, Height: 120,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Type != "COMPLETE" || result.Output != output {
+		t.Fatalf("unexpected result: %#v", result)
+	}
+	info, err := os.Stat(output)
+	if err != nil {
+		t.Fatalf("render output missing: %v", err)
+	}
+	if info.Size() == 0 {
+		t.Fatal("render output is empty")
 	}
 }
