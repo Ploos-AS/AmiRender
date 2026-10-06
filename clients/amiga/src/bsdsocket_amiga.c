@@ -12,7 +12,6 @@
 #include <proto/bsdsocket.h>
 #include <proto/exec.h>
 
-#include <netdb.h>
 #include <netinet/in.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -46,7 +45,6 @@ int amirender_bsdsocket_connect(
     unsigned short port,
     struct amirender_transport *transport)
 {
-    struct hostent *entry;
     struct sockaddr_in address;
     int fd;
 
@@ -56,13 +54,6 @@ int amirender_bsdsocket_connect(
 
     SocketBase = OpenLibrary("bsdsocket.library", 4);
     if (SocketBase == NULL) {
-        return -1;
-    }
-
-    entry = (struct hostent *)(void *)gethostbyname((char *)host);
-    if (entry == NULL || entry->h_addr_list == NULL || entry->h_addr_list[0] == NULL) {
-        CloseLibrary(SocketBase);
-        SocketBase = NULL;
         return -1;
     }
 
@@ -76,7 +67,13 @@ int amirender_bsdsocket_connect(
     memset(&address, 0, sizeof(address));
     address.sin_family = AF_INET;
     address.sin_port = htons(port);
-    memcpy(&address.sin_addr, entry->h_addr_list[0], sizeof(address.sin_addr));
+    address.sin_addr.s_addr = inet_addr((char *)host);
+    if (address.sin_addr.s_addr == INADDR_NONE) {
+        CloseSocket(fd);
+        CloseLibrary(SocketBase);
+        SocketBase = NULL;
+        return -1;
+    }
 
     if (connect(fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
         CloseSocket(fd);
