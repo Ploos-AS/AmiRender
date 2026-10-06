@@ -18,6 +18,47 @@
 
 struct Library *SocketBase = NULL;
 
+
+static int parse_ipv4(const char *text, unsigned long *result)
+{
+    unsigned long value = 0;
+    int part;
+
+    if (text == NULL || result == NULL) {
+        return -1;
+    }
+
+    for (part = 0; part < 4; ++part) {
+        unsigned long octet = 0;
+        int digits = 0;
+
+        while (*text >= '0' && *text <= '9') {
+            octet = octet * 10UL + (unsigned long)(*text - '0');
+            if (octet > 255UL) {
+                return -1;
+            }
+            ++text;
+            ++digits;
+        }
+        if (digits == 0) {
+            return -1;
+        }
+        value = (value << 8) | octet;
+        if (part < 3) {
+            if (*text != '.') {
+                return -1;
+            }
+            ++text;
+        }
+    }
+    if (*text != '\0') {
+        return -1;
+    }
+
+    *result = value;
+    return 0;
+}
+
 static int socket_send(void *context, const char *data, size_t length)
 {
     struct amirender_bsdsocket *state = (struct amirender_bsdsocket *)context;
@@ -47,6 +88,7 @@ int amirender_bsdsocket_connect(
 {
     struct sockaddr_in address;
     int fd;
+    unsigned long ipv4;
 
     if (state == NULL || host == NULL || transport == NULL) {
         return -1;
@@ -67,13 +109,13 @@ int amirender_bsdsocket_connect(
     memset(&address, 0, sizeof(address));
     address.sin_family = AF_INET;
     address.sin_port = htons(port);
-    address.sin_addr.s_addr = inet_addr((char *)host);
-    if (address.sin_addr.s_addr == INADDR_NONE) {
+    if (parse_ipv4(host, &ipv4) != 0) {
         CloseSocket(fd);
         CloseLibrary(SocketBase);
         SocketBase = NULL;
         return -1;
     }
+    address.sin_addr.s_addr = htonl(ipv4);
 
     if (connect(fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
         CloseSocket(fd);
