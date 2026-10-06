@@ -8,6 +8,7 @@
 
 #include "amirender_bsdsocket.h"
 
+#include <sys/types.h>
 #include <proto/bsdsocket.h>
 #include <proto/exec.h>
 
@@ -24,7 +25,7 @@ static int socket_send(void *context, const char *data, size_t length)
     size_t sent = 0;
 
     while (sent < length) {
-        int n = send(state->socket_fd, data + sent, length - sent, 0);
+        int n = send(state->socket_fd, (void *)(data + sent), length - sent, 0);
         if (n <= 0) {
             return -1;
         }
@@ -58,7 +59,7 @@ int amirender_bsdsocket_connect(
         return -1;
     }
 
-    entry = gethostbyname(host);
+    entry = gethostbyname((char *)host);
     if (entry == NULL || entry->h_addr_list == NULL || entry->h_addr_list[0] == NULL) {
         CloseLibrary(SocketBase);
         SocketBase = NULL;
