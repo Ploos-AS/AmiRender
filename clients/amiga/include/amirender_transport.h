@@ -11,6 +11,14 @@ struct amirender_transport {
     int (*receive)(void *context, char *buffer, size_t size);
 };
 
+int amirender_upload_asset(
+    struct amirender_transport *transport,
+    const char *name,
+    const unsigned char *data,
+    size_t data_size,
+    char *asset,
+    size_t asset_size);
+
 int amirender_submit_job(
     struct amirender_transport *transport,
     const struct amirender_job *job,
