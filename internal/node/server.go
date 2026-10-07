@@ -11,16 +11,24 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Ploos-AS/AmiRender/internal/engine"
 	"github.com/Ploos-AS/AmiRender/internal/engine/povray"
 	"github.com/Ploos-AS/AmiRender/internal/farm"
 )
 
+type uploadSession struct {
+	size int64
+	created time.Time
+}
+
+const uploadSessionTTL = 30 * time.Minute
+
 var uploadSessions = struct {
 	sync.Mutex
-	expected map[string]int64
-}{expected: make(map[string]int64)}
+	expected map[string]uploadSession
+}{expected: make(map[string]uploadSession)}
 
 const maxUploadBytes = 1024 * 1024
 const maxMessageBytes = 2 * 1024 * 1024
@@ -118,7 +126,23 @@ func validStagedAsset(asset string) (string, bool) {
 	return clean, asset != "" && strings.HasPrefix(filepath.Base(dir), "amirender-asset-")
 }
 
+func cleanupExpiredUploads(now time.Time) {
+	var expired []string
+	uploadSessions.Lock()
+	for path, session := range uploadSessions.expected {
+		if now.Sub(session.created) >= uploadSessionTTL {
+			delete(uploadSessions.expected, path)
+			expired = append(expired, path)
+		}
+	}
+	uploadSessions.Unlock()
+	for _, path := range expired {
+		_ = os.RemoveAll(filepath.Dir(path))
+	}
+}
+
 func handleUploadBegin(c net.Conn, m message) {
+	cleanupExpiredUploads(time.Now())
 	if filepath.Base(m.Name) != m.Name || m.Name == "." || m.Name == "" || m.Size <= 0 || m.Size > maxUploadBytes {
 		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "invalid upload"})
 		return
@@ -137,7 +161,7 @@ func handleUploadBegin(c net.Conn, m message) {
 	}
 	_ = file.Close()
 	uploadSessions.Lock()
-	uploadSessions.expected[path] = m.Size
+	uploadSessions.expected[path] = uploadSession{size: m.Size, created: time.Now()}
 	uploadSessions.Unlock()
 	_ = json.NewEncoder(c).Encode(stagedResult{Type: "STAGING", Asset: path, Size: m.Size})
 }
@@ -182,7 +206,7 @@ func handleUploadEnd(c net.Conn, m message) {
 	uploadSessions.Lock()
 	expected, exists := uploadSessions.expected[clean]
 	uploadSessions.Unlock()
-	if !exists || expected != m.Size {
+	if !exists || expected.size != m.Size {
 		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "upload size mismatch"})
 		return
 	}
