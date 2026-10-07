@@ -20,10 +20,10 @@ const maxUploadBytes = 1024 * 1024
 const maxMessageBytes = 2 * 1024 * 1024
 
 type message struct {
-	Type string          `json:"type"`
-	Job  json.RawMessage `json:"job"`
-	Name string          `json:"name,omitempty"`
-	Data string          `json:"data,omitempty"`
+	Type  string          `json:"type"`
+	Job   json.RawMessage `json:"job"`
+	Name  string          `json:"name,omitempty"`
+	Data  string          `json:"data,omitempty"`
 	Asset string          `json:"asset,omitempty"`
 }
 
