@@ -494,3 +494,40 @@ func TestPOVRayRejectsUnfinishedUpload(t *testing.T) {
 		t.Fatal("completed upload remains blocked")
 	}
 }
+
+func TestCleanupExpiredUploadsPreservesActiveSessions(t *testing.T) {
+	now := time.Now()
+	expiredDir := t.TempDir()
+	activeDir := t.TempDir()
+	expiredPath := filepath.Join(expiredDir, "old.pov")
+	activePath := filepath.Join(activeDir, "new.pov")
+	for _, path := range []string{expiredPath, activePath} {
+		if err := os.WriteFile(path, []byte("scene"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	uploadSessions.Lock()
+	uploadSessions.expected[expiredPath] = uploadSession{size: 5, created: now.Add(-uploadSessionTTL - time.Second)}
+	uploadSessions.expected[activePath] = uploadSession{size: 5, created: now.Add(-uploadSessionTTL + time.Second)}
+	uploadSessions.Unlock()
+	defer func() {
+		uploadSessions.Lock()
+		delete(uploadSessions.expected, expiredPath)
+		delete(uploadSessions.expected, activePath)
+		uploadSessions.Unlock()
+	}()
+	cleanupExpiredUploads(now)
+	uploadSessions.Lock()
+	_, expiredExists := uploadSessions.expected[expiredPath]
+	_, activeExists := uploadSessions.expected[activePath]
+	uploadSessions.Unlock()
+	if expiredExists || !activeExists {
+		t.Fatalf("unexpected sessions: expired=%t active=%t", expiredExists, activeExists)
+	}
+	if _, err := os.Stat(expiredPath); !os.IsNotExist(err) {
+		t.Fatalf("expired file still exists: %v", err)
+	}
+	if _, err := os.Stat(activePath); err != nil {
+		t.Fatalf("active file removed: %v", err)
+	}
+}
