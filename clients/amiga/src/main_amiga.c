@@ -160,11 +160,6 @@ int main(int argc, char **argv)
         }
     }
 
-    if (read_scene(argv[2], scene_data, sizeof(scene_data), &scene_size) != 0) {
-        fprintf(stderr, "AmiRender: cannot read scene or scene exceeds %d bytes\n", MAX_SCENE_SIZE);
-        return 10;
-    }
-
     job.id = "amiga-cli";
     job.engine = "povray";
     job.scene = argv[2];
@@ -195,15 +190,10 @@ int main(int argc, char **argv)
         return 10;
     }
 
-    rc = amirender_download_asset(
-        &transport, output_asset, output_data, sizeof(output_data), &output_size);
+    rc = download_file(&transport, output_asset, argv[3], &output_size);
     amirender_bsdsocket_close(&socket_state);
     if (rc != 0) {
-        fprintf(stderr, "AmiRender: output download failed or exceeds %d bytes\n", MAX_OUTPUT_SIZE);
-        return 10;
-    }
-    if (write_output(argv[3], output_data, output_size) != 0) {
-        fprintf(stderr, "AmiRender: cannot write output %s\n", argv[3]);
+        fprintf(stderr, "AmiRender: output download failed\n");
         return 10;
     }
 
