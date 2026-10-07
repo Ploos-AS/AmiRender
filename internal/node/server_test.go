@@ -270,3 +270,111 @@ func TestUploadStagesAssetAndRejectsTraversal(t *testing.T) {
 		t.Fatalf("traversal upload was not rejected: %#v", rejected)
 	}
 }
+
+
+func TestChunkedAssetRoundTripAndOffsetValidation(t *testing.T) {
+	server, client := net.Pipe()
+	defer client.Close()
+	go Handle(server)
+
+	enc := json.NewEncoder(client)
+	dec := json.NewDecoder(bufio.NewReader(client))
+	want := make([]byte, 9000)
+	for i := range want {
+		want[i] = byte(i % 251)
+	}
+
+	if err := enc.Encode(map[string]any{
+		"type": "UPLOAD_BEGIN", "name": "large.bin", "size": len(want),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var begun stagedResult
+	if err := dec.Decode(&begun); err != nil {
+		t.Fatal(err)
+	}
+	if begun.Type != "STAGING" || begun.Asset == "" || begun.Size != int64(len(want)) {
+		t.Fatalf("unexpected begin result: %#v", begun)
+	}
+	defer os.RemoveAll(filepath.Dir(begun.Asset))
+
+	offset := 0
+	for offset < len(want) {
+		end := offset + 4096
+		if end > len(want) {
+			end = len(want)
+		}
+		if err := enc.Encode(map[string]any{
+			"type": "UPLOAD_CHUNK", "asset": begun.Asset, "offset": offset,
+			"data": base64.StdEncoding.EncodeToString(want[offset:end]),
+		}); err != nil {
+			t.Fatal(err)
+		}
+		var ack stagedResult
+		if err := dec.Decode(&ack); err != nil {
+			t.Fatal(err)
+		}
+		if ack.Type != "CHUNKED" || ack.Offset != int64(end) {
+			t.Fatalf("unexpected chunk acknowledgement: %#v", ack)
+		}
+		offset = end
+	}
+
+	if err := enc.Encode(map[string]any{
+		"type": "UPLOAD_CHUNK", "asset": begun.Asset, "offset": 1,
+		"data": base64.StdEncoding.EncodeToString([]byte("bad")),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var rejected stagedResult
+	if err := dec.Decode(&rejected); err != nil {
+		t.Fatal(err)
+	}
+	if rejected.Type != "FAILED" || rejected.Error != "unexpected chunk offset" {
+		t.Fatalf("bad offset was not rejected: %#v", rejected)
+	}
+
+	var got []byte
+	for offset = 0; ; {
+		if err := enc.Encode(map[string]any{
+			"type": "DOWNLOAD_CHUNK", "asset": begun.Asset, "offset": offset, "size": 4096,
+		}); err != nil {
+			t.Fatal(err)
+		}
+		var part stagedResult
+		if err := dec.Decode(&part); err != nil {
+			t.Fatal(err)
+		}
+		if part.Type != "DATA" || part.Offset != int64(offset) {
+			t.Fatalf("unexpected download chunk: %#v", part)
+		}
+		decoded, err := base64.StdEncoding.DecodeString(part.Data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if int64(len(decoded)) != part.Size {
+			t.Fatalf("chunk size mismatch: decoded=%d declared=%d", len(decoded), part.Size)
+		}
+		got = append(got, decoded...)
+		offset += len(decoded)
+		if part.EOF {
+			break
+		}
+	}
+	if string(got) != string(want) {
+		t.Fatalf("chunked round trip mismatch: got=%d want=%d", len(got), len(want))
+	}
+
+	if err := enc.Encode(map[string]any{
+		"type": "DOWNLOAD_CHUNK", "asset": begun.Asset, "offset": 0, "size": 4097,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var oversized stagedResult
+	if err := dec.Decode(&oversized); err != nil {
+		t.Fatal(err)
+	}
+	if oversized.Type != "FAILED" {
+		t.Fatalf("oversized download chunk was not rejected: %#v", oversized)
+	}
+}
