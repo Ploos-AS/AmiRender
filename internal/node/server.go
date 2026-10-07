@@ -20,23 +20,23 @@ const maxUploadBytes = 1024 * 1024
 const maxMessageBytes = 2 * 1024 * 1024
 
 type message struct {
-	Type  string          `json:"type"`
-	Job   json.RawMessage `json:"job"`
-	Name  string          `json:"name,omitempty"`
-	Data  string          `json:"data,omitempty"`
-	Asset string          `json:"asset,omitempty"`
+	Type   string          `json:"type"`
+	Job    json.RawMessage `json:"job"`
+	Name   string          `json:"name,omitempty"`
+	Data   string          `json:"data,omitempty"`
+	Asset  string          `json:"asset,omitempty"`
 	Offset int64           `json:"offset,omitempty"`
-	Size int64             `json:"size,omitempty"`
+	Size   int64           `json:"size,omitempty"`
 }
 
 type stagedResult struct {
-	Type  string `json:"type"`
-	Asset string `json:"asset,omitempty"`
-	Error string `json:"error,omitempty"`
-	Data  string `json:"data,omitempty"`
+	Type   string `json:"type"`
+	Asset  string `json:"asset,omitempty"`
+	Error  string `json:"error,omitempty"`
+	Data   string `json:"data,omitempty"`
 	Offset int64  `json:"offset,omitempty"`
-	Size int64    `json:"size,omitempty"`
-	EOF bool      `json:"eof,omitempty"`
+	Size   int64  `json:"size,omitempty"`
+	EOF    bool   `json:"eof,omitempty"`
 }
 
 func Handle(c net.Conn) {
