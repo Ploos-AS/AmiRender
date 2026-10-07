@@ -40,6 +40,11 @@ int amirender_upload_chunk(
     const unsigned char *data,
     size_t data_size);
 
+int amirender_upload_end(
+    struct amirender_transport *transport,
+    const char *asset,
+    size_t total_size);
+
 int amirender_download_chunk(
     struct amirender_transport *transport,
     const char *asset,
