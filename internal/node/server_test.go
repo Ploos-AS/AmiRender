@@ -271,7 +271,6 @@ func TestUploadStagesAssetAndRejectsTraversal(t *testing.T) {
 	}
 }
 
-
 func TestChunkedAssetRoundTripAndOffsetValidation(t *testing.T) {
 	server, client := net.Pipe()
 	defer client.Close()
