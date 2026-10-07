@@ -93,6 +93,55 @@ sphere { <0, 0, 0>, 1 pigment { color rgb <0.7, 0.7, 0.7> } }
 	}
 }
 
+
+func TestDownloadReturnsStagedAsset(t *testing.T) {
+	dir, err := os.MkdirTemp("", "amirender-asset-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	path := filepath.Join(dir, "frame.png")
+	want := []byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a}
+	if err := os.WriteFile(path, want, 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	server, client := net.Pipe()
+	defer client.Close()
+	go Handle(server)
+
+	enc := json.NewEncoder(client)
+	dec := json.NewDecoder(bufio.NewReader(client))
+	if err := enc.Encode(map[string]string{"type": "DOWNLOAD", "asset": path}); err != nil {
+		t.Fatal(err)
+	}
+	var got stagedResult
+	if err := dec.Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Type != "DATA" || got.Asset != path {
+		t.Fatalf("unexpected download result: %#v", got)
+	}
+	decoded, err := base64.StdEncoding.DecodeString(got.Data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(decoded) != string(want) {
+		t.Fatalf("download mismatch: %v", decoded)
+	}
+
+	if err := enc.Encode(map[string]string{"type": "DOWNLOAD", "asset": "/etc/passwd"}); err != nil {
+		t.Fatal(err)
+	}
+	var rejected stagedResult
+	if err := dec.Decode(&rejected); err != nil {
+		t.Fatal(err)
+	}
+	if rejected.Type != "FAILED" {
+		t.Fatalf("unsafe download was not rejected: %#v", rejected)
+	}
+}
+
 func TestUploadStagesAssetAndRejectsTraversal(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
