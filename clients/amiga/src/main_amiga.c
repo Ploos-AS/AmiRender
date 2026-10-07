@@ -66,7 +66,8 @@ static int upload_file(
         fclose(file);
         return -1;
     }
-    return fclose(file) == 0 ? 0 : -1;
+    if (fclose(file) != 0) return -1;
+    return amirender_upload_end(transport, asset, total);
 }
 
 static int extract_output(const char *reply, char *output, size_t output_size)
