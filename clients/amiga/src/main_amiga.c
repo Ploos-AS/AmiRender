@@ -9,8 +9,7 @@
 #define AMIRENDER_PORT 6800
 #define REPLY_SIZE 1024
 #define ASSET_SIZE 1024
-#define MAX_SCENE_SIZE 6000
-#define MAX_OUTPUT_SIZE 6000
+#define CHUNK_SIZE 4096
 
 static const char *base_name(const char *path)
 {
@@ -25,32 +24,49 @@ static const char *base_name(const char *path)
     return name;
 }
 
-static int read_scene(const char *path, unsigned char *buffer, size_t capacity, size_t *length)
+static int scene_size(const char *path, size_t *length)
 {
     FILE *file;
     long size;
 
     file = fopen(path, "rb");
-    if (file == NULL) {
-        return -1;
-    }
+    if (file == NULL) return -1;
     if (fseek(file, 0, SEEK_END) != 0) {
         fclose(file);
         return -1;
     }
     size = ftell(file);
-    if (size <= 0 || (unsigned long)size > (unsigned long)capacity) {
-        fclose(file);
-        return -1;
-    }
-    if (fseek(file, 0, SEEK_SET) != 0 ||
-        fread(buffer, 1, (size_t)size, file) != (size_t)size) {
-        fclose(file);
-        return -1;
-    }
     fclose(file);
+    if (size <= 0) return -1;
     *length = (size_t)size;
     return 0;
+}
+
+static int upload_file(
+    struct amirender_transport *transport, const char *path,
+    char *asset, size_t asset_size)
+{
+    FILE *file;
+    unsigned char buffer[CHUNK_SIZE];
+    size_t total, offset = 0, count;
+
+    if (scene_size(path, &total) != 0) return -1;
+    if (amirender_upload_begin(
+            transport, base_name(path), total, asset, asset_size) != 0) return -1;
+    file = fopen(path, "rb");
+    if (file == NULL) return -1;
+    while ((count = fread(buffer, 1, sizeof(buffer), file)) > 0) {
+        if (amirender_upload_chunk(transport, asset, offset, buffer, count) != 0) {
+            fclose(file);
+            return -1;
+        }
+        offset += count;
+    }
+    if (ferror(file) || offset != total) {
+        fclose(file);
+        return -1;
+    }
+    return fclose(file) == 0 ? 0 : -1;
 }
 
 static int extract_output(const char *reply, char *output, size_t output_size)
@@ -71,15 +87,42 @@ static int extract_output(const char *reply, char *output, size_t output_size)
     return 0;
 }
 
-static int write_output(const char *path, const unsigned char *data, size_t length)
+static int download_file(
+    struct amirender_transport *transport, const char *asset, const char *path,
+    size_t *total_size)
 {
-    FILE *file = fopen(path, "wb");
+    FILE *file;
+    unsigned char buffer[CHUNK_SIZE];
+    size_t offset = 0, count;
+    int eof = 0;
+
+    file = fopen(path, "wb");
     if (file == NULL) return -1;
-    if (fwrite(data, 1, length, file) != length) {
-        fclose(file);
+    while (!eof) {
+        if (amirender_download_chunk(
+                transport, asset, offset, buffer, sizeof(buffer), &count, &eof) != 0) {
+            fclose(file);
+            remove(path);
+            return -1;
+        }
+        if (count > 0 && fwrite(buffer, 1, count, file) != count) {
+            fclose(file);
+            remove(path);
+            return -1;
+        }
+        offset += count;
+        if (count == 0 && !eof) {
+            fclose(file);
+            remove(path);
+            return -1;
+        }
+    }
+    if (fclose(file) != 0) {
+        remove(path);
         return -1;
     }
-    return fclose(file) == 0 ? 0 : -1;
+    *total_size = offset;
+    return 0;
 }
 
 static void usage(const char *program)
@@ -98,9 +141,6 @@ int main(int argc, char **argv)
     char reply[REPLY_SIZE];
     char asset[ASSET_SIZE];
     char output_asset[ASSET_SIZE];
-    unsigned char scene_data[MAX_SCENE_SIZE];
-    unsigned char output_data[MAX_OUTPUT_SIZE];
-    size_t scene_size;
     size_t output_size;
     int width = 0;
     int height = 0;
@@ -140,8 +180,7 @@ int main(int argc, char **argv)
         return 10;
     }
 
-    rc = amirender_upload_asset(
-        &transport, base_name(argv[2]), scene_data, scene_size, asset, sizeof(asset));
+    rc = upload_file(&transport, argv[2], asset, sizeof(asset));
     if (rc != 0) {
         amirender_bsdsocket_close(&socket_state);
         fprintf(stderr, "AmiRender: scene upload failed\n");
