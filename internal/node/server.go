@@ -94,6 +94,15 @@ func Handle(c net.Conn) {
 				Type: "COMPLETE", JobID: j.ID, Engine: "null", Output: j.Output,
 			})
 		case "povray":
+			uploadSessions.Lock()
+			_, incomplete := uploadSessions.expected[filepath.Clean(j.Scene)]
+			uploadSessions.Unlock()
+			if incomplete {
+				writeResult(c, farm.WorkerResult{
+					Type: "FAILED", JobID: j.ID, Engine: "povray", Error: "scene upload incomplete",
+				})
+				continue
+			}
 			renderPOVRay(c, j)
 		default:
 			writeResult(c, farm.WorkerResult{
