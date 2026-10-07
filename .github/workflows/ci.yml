@@ -27,6 +27,11 @@ jobs:
           ./build-amiga-client-test
           cc -std=c99 -Wall -Wextra -Werror -pedantic \
             -Iclients/amiga/include \
+            clients/amiga/src/upload.c clients/amiga/tests/test_upload.c \
+            -o build-amiga-upload-test
+          ./build-amiga-upload-test
+          cc -std=c99 -Wall -Wextra -Werror -pedantic \
+            -Iclients/amiga/include \
             clients/amiga/src/submit.c clients/amiga/src/client.c \
             clients/amiga/tests/test_client.c \
             -o build-amiga-transport-test
