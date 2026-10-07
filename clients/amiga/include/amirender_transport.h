@@ -26,6 +26,29 @@ int amirender_download_asset(
     size_t data_size,
     size_t *received_size);
 
+int amirender_upload_begin(
+    struct amirender_transport *transport,
+    const char *name,
+    size_t total_size,
+    char *asset,
+    size_t asset_size);
+
+int amirender_upload_chunk(
+    struct amirender_transport *transport,
+    const char *asset,
+    size_t offset,
+    const unsigned char *data,
+    size_t data_size);
+
+int amirender_download_chunk(
+    struct amirender_transport *transport,
+    const char *asset,
+    size_t offset,
+    unsigned char *data,
+    size_t data_size,
+    size_t *received_size,
+    int *eof);
+
 int amirender_submit_job(
     struct amirender_transport *transport,
     const struct amirender_job *job,
