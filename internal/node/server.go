@@ -19,7 +19,7 @@ import (
 )
 
 type uploadSession struct {
-	size int64
+	size    int64
 	created time.Time
 }
 
