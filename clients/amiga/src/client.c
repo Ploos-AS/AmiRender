@@ -168,15 +168,15 @@ int amirender_upload_chunk(
     struct amirender_transport *transport, const char *asset, size_t offset,
     const unsigned char *data, size_t data_size)
 {
-    char encoded[5465];
-    char request[6144];
+    char encoded[2733];
+    char request[3584];
     char reply[1024];
     static const char alphabet[] =
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     size_t i, out = 0;
     int n, received;
     if (transport == NULL || transport->send == NULL || transport->receive == NULL ||
-        asset == NULL || data == NULL || data_size == 0 || data_size > 4096) return -1;
+        asset == NULL || data == NULL || data_size == 0 || data_size > 2048) return -1;
     if (strchr(asset, '"') != NULL || strchr(asset, '\\') != NULL) return -1;
     for (i = 0; i < data_size; i += 3) {
         unsigned int v = (unsigned int)data[i] << 16;
@@ -204,14 +204,14 @@ int amirender_download_chunk(
     unsigned char *data, size_t data_size, size_t *received_size, int *eof)
 {
     char request[1200];
-    char reply[6144];
+    char reply[3584];
     const char *key = "\"data\":\"";
     const char *p, *end;
     size_t out = 0;
     int n, received;
     if (transport == NULL || transport->send == NULL || transport->receive == NULL ||
         asset == NULL || data == NULL || received_size == NULL || eof == NULL ||
-        data_size == 0 || data_size > 4096) return -1;
+        data_size == 0 || data_size > 2048) return -1;
     if (strchr(asset, '"') != NULL || strchr(asset, '\\') != NULL) return -1;
     n = snprintf(request, sizeof(request),
         "{\"type\":\"DOWNLOAD_CHUNK\",\"asset\":\"%s\",\"offset\":%lu,\"size\":%lu}\n",
