@@ -199,6 +199,26 @@ int amirender_upload_chunk(
     return strstr(reply, "\"type\":\"CHUNKED\"") != NULL ? 0 : -1;
 }
 
+int amirender_upload_end(
+    struct amirender_transport *transport, const char *asset, size_t total_size)
+{
+    char request[1200];
+    char reply[1024];
+    int n, received;
+    if (transport == NULL || transport->send == NULL || transport->receive == NULL ||
+        asset == NULL || total_size == 0) return -1;
+    if (strchr(asset, '"') != NULL || strchr(asset, '\\') != NULL) return -1;
+    n = snprintf(request, sizeof(request),
+        "{\"type\":\"UPLOAD_END\",\"asset\":\"%s\",\"size\":%lu}\n",
+        asset, (unsigned long)total_size);
+    if (n < 0 || (size_t)n >= sizeof(request)) return -1;
+    if (transport->send(transport->context, request, (size_t)n) != n) return -1;
+    received = transport->receive(transport->context, reply, sizeof(reply) - 1);
+    if (received <= 0 || (size_t)received >= sizeof(reply)) return -1;
+    reply[received] = '\0';
+    return strstr(reply, "\"type\":\"STAGED\"") != NULL ? 0 : -1;
+}
+
 int amirender_download_chunk(
     struct amirender_transport *transport, const char *asset, size_t offset,
     unsigned char *data, size_t data_size, size_t *received_size, int *eof)
