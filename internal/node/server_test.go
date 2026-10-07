@@ -430,7 +430,7 @@ func TestPOVRayRejectsUnfinishedUpload(t *testing.T) {
 	go Handle(server)
 	enc := json.NewEncoder(client)
 	dec := json.NewDecoder(bufio.NewReader(client))
-	if err := enc.Encode(map[string]any{"type": "UPLOAD_BEGIN", "name": "pending.pov", "size": 10}); err != nil {
+	if err := enc.Encode(map[string]any{"type": "UPLOAD_BEGIN", "name": "pending.pov", "size": 11}); err != nil {
 		t.Fatal(err)
 	}
 	var begun stagedResult
@@ -474,10 +474,10 @@ func TestPOVRayRejectsUnfinishedUpload(t *testing.T) {
 	if err := dec.Decode(&chunk); err != nil {
 		t.Fatal(err)
 	}
-	if chunk.Type != "CHUNKED" || chunk.Offset != 10 {
+	if chunk.Type != "CHUNKED" || chunk.Offset != 11 {
 		t.Fatalf("unexpected final chunk: %#v", chunk)
 	}
-	if err := enc.Encode(map[string]any{"type": "UPLOAD_END", "asset": begun.Asset, "size": 10}); err != nil {
+	if err := enc.Encode(map[string]any{"type": "UPLOAD_END", "asset": begun.Asset, "size": 11}); err != nil {
 		t.Fatal(err)
 	}
 	var staged stagedResult
