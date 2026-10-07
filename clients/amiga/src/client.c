@@ -2,6 +2,7 @@
 #include "amirender_transport.h"
 #include "amirender_upload.h"
 
+#include <stdio.h>
 #include <string.h>
 
 int amirender_upload_asset(
