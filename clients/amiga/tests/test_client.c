@@ -44,6 +44,8 @@ int main(void)
     };
     char reply[512];
     char asset[256];
+    unsigned char downloaded[16];
+    size_t downloaded_size = 0;
     const unsigned char scene[] = "camera {}\n";
 
     fake.reply = "{\"type\":\"COMPLETE\",\"job_id\":\"amiga-0002\","
@@ -79,6 +81,32 @@ int main(void)
     if (amirender_upload_asset(
             &transport, "scene.pov", scene, sizeof(scene) - 1, asset, sizeof(asset)) == 0) {
         return 7;
+    }
+
+    fake.reply = "{\"type\":\"DATA\",\"asset\":\"/tmp/amirender-asset-x/frame.png\","
+                 "\"data\":\"iVBORw0K\"}\n";
+    if (amirender_download_asset(
+            &transport, "/tmp/amirender-asset-x/frame.png",
+            downloaded, sizeof(downloaded), &downloaded_size) != 0) {
+        return 8;
+    }
+    if (downloaded_size != 6 ||
+        downloaded[0] != 0x89 || downloaded[1] != 'P' ||
+        downloaded[2] != 'N' || downloaded[3] != 'G' ||
+        downloaded[4] != 0x0d || downloaded[5] != 0x0a) {
+        fprintf(stderr, "downloaded data mismatch\n");
+        return 9;
+    }
+    if (strstr(fake.sent, "\"type\":\"DOWNLOAD\"") == NULL) {
+        fprintf(stderr, "download request missing\n");
+        return 10;
+    }
+
+    fake.reply = "{\"type\":\"FAILED\",\"error\":\"asset unavailable\"}\n";
+    if (amirender_download_asset(
+            &transport, "/tmp/amirender-asset-x/frame.png",
+            downloaded, sizeof(downloaded), &downloaded_size) == 0) {
+        return 11;
     }
     return 0;
 }
