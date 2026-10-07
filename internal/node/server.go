@@ -3,18 +3,31 @@ package node
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 
 	"github.com/Ploos-AS/AmiRender/internal/engine"
 	"github.com/Ploos-AS/AmiRender/internal/engine/povray"
 	"github.com/Ploos-AS/AmiRender/internal/farm"
 )
 
+const maxUploadBytes = 1024 * 1024
+
 type message struct {
 	Type string          `json:"type"`
 	Job  json.RawMessage `json:"job"`
+	Name string          `json:"name,omitempty"`
+	Data string          `json:"data,omitempty"`
+}
+
+type stagedResult struct {
+	Type  string `json:"type"`
+	Asset string `json:"asset,omitempty"`
+	Error string `json:"error,omitempty"`
 }
 
 func Handle(c net.Conn) {
@@ -22,7 +35,15 @@ func Handle(c net.Conn) {
 	s := bufio.NewScanner(c)
 	for s.Scan() {
 		var m message
-		if json.Unmarshal(s.Bytes(), &m) != nil || m.Type != "SUBMIT" {
+		if json.Unmarshal(s.Bytes(), &m) != nil {
+			writeResult(c, farm.WorkerResult{Type: "FAILED", Error: "bad request"})
+			continue
+		}
+		if m.Type == "UPLOAD" {
+			handleUpload(c, m)
+			continue
+		}
+		if m.Type != "SUBMIT" {
 			writeResult(c, farm.WorkerResult{Type: "FAILED", Error: "bad request"})
 			continue
 		}
@@ -44,6 +65,30 @@ func Handle(c net.Conn) {
 			})
 		}
 	}
+}
+
+func handleUpload(c net.Conn, m message) {
+	if filepath.Base(m.Name) != m.Name || m.Name == "." || m.Name == "" {
+		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "unsafe asset name"})
+		return
+	}
+	data, err := base64.StdEncoding.DecodeString(m.Data)
+	if err != nil || len(data) == 0 || len(data) > maxUploadBytes {
+		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "invalid asset data"})
+		return
+	}
+	dir, err := os.MkdirTemp("", "amirender-asset-")
+	if err != nil {
+		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "staging failed"})
+		return
+	}
+	path := filepath.Join(dir, m.Name)
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		_ = os.RemoveAll(dir)
+		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "staging failed"})
+		return
+	}
+	_ = json.NewEncoder(c).Encode(stagedResult{Type: "STAGED", Asset: path})
 }
 
 func renderPOVRay(c net.Conn, j farm.RenderJob) {
