@@ -9,7 +9,7 @@
 #define AMIRENDER_PORT 6800
 #define REPLY_SIZE 1024
 #define ASSET_SIZE 1024
-#define CHUNK_SIZE 4096
+#define CHUNK_SIZE 2048
 
 static const char *base_name(const char *path)
 {
