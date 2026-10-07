@@ -58,6 +58,73 @@ int amirender_upload_asset(
     return 0;
 }
 
+static int base64_value(char ch)
+{
+    if (ch >= 'A' && ch <= 'Z') return ch - 'A';
+    if (ch >= 'a' && ch <= 'z') return ch - 'a' + 26;
+    if (ch >= '0' && ch <= '9') return ch - '0' + 52;
+    if (ch == '+') return 62;
+    if (ch == '/') return 63;
+    return -1;
+}
+
+int amirender_download_asset(
+    struct amirender_transport *transport,
+    const char *asset,
+    unsigned char *data,
+    size_t data_size,
+    size_t *received_size)
+{
+    char request[1200];
+    char reply[8192];
+    const char *key = "\"data\":\"";
+    const char *p;
+    const char *end;
+    size_t out = 0;
+    int received;
+
+    if (transport == NULL || transport->send == NULL || transport->receive == NULL ||
+        asset == NULL || data == NULL || received_size == NULL) return -1;
+    if (strchr(asset, '\"') != NULL || strchr(asset, '\\') != NULL) return -1;
+    if (snprintf(request, sizeof(request), "{\"type\":\"DOWNLOAD\",\"asset\":\"%s\"}\n", asset) < 0 ||
+        strlen(request) >= sizeof(request)) return -1;
+    if (transport->send(transport->context, request, strlen(request)) != (int)strlen(request)) return -1;
+    received = transport->receive(transport->context, reply, sizeof(reply) - 1);
+    if (received <= 0 || (size_t)received >= sizeof(reply)) return -1;
+    reply[received] = '\0';
+    if (strstr(reply, "\"type\":\"DATA\"") == NULL) return -1;
+    p = strstr(reply, key);
+    if (p == NULL) return -1;
+    p += strlen(key);
+    end = strchr(p, '\"');
+    if (end == NULL) return -1;
+
+    while (p < end) {
+        int a, b, d, e;
+        unsigned int v;
+        if (end - p < 4) return -1;
+        a = base64_value(p[0]); b = base64_value(p[1]);
+        d = p[2] == '=' ? 0 : base64_value(p[2]);
+        e = p[3] == '=' ? 0 : base64_value(p[3]);
+        if (a < 0 || b < 0 || d < 0 || e < 0) return -1;
+        v = ((unsigned int)a << 18) | ((unsigned int)b << 12) |
+            ((unsigned int)d << 6) | (unsigned int)e;
+        if (out >= data_size) return -1;
+        data[out++] = (unsigned char)(v >> 16);
+        if (p[2] != '=') {
+            if (out >= data_size) return -1;
+            data[out++] = (unsigned char)(v >> 8);
+        }
+        if (p[3] != '=') {
+            if (out >= data_size) return -1;
+            data[out++] = (unsigned char)v;
+        }
+        p += 4;
+    }
+    *received_size = out;
+    return 0;
+}
+
 int amirender_submit_job(
     struct amirender_transport *transport,
     const struct amirender_job *job,
