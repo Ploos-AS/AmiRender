@@ -16,6 +16,7 @@ import (
 )
 
 const maxUploadBytes = 1024 * 1024
+const maxMessageBytes = 2 * 1024 * 1024
 
 type message struct {
 	Type string          `json:"type"`
@@ -33,6 +34,7 @@ type stagedResult struct {
 func Handle(c net.Conn) {
 	defer c.Close()
 	s := bufio.NewScanner(c)
+	s.Buffer(make([]byte, 64*1024), maxMessageBytes)
 	for s.Scan() {
 		var m message
 		if json.Unmarshal(s.Bytes(), &m) != nil {
