@@ -19,6 +19,13 @@ int amirender_upload_asset(
     char *asset,
     size_t asset_size);
 
+int amirender_download_asset(
+    struct amirender_transport *transport,
+    const char *asset,
+    unsigned char *data,
+    size_t data_size,
+    size_t *received_size);
+
 int amirender_submit_job(
     struct amirender_transport *transport,
     const struct amirender_job *job,
