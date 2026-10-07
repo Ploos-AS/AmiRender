@@ -146,7 +146,7 @@ sphere { <0, 0, 0>, 1 pigment { color rgb <0.7, 0.7, 0.7> } }
 	}); err != nil {
 		t.Fatal(err)
 	}
-	var rendered stagedResult
+	var rendered farm.WorkerResult
 	if err := dec.Decode(&rendered); err != nil {
 		t.Fatal(err)
 	}
