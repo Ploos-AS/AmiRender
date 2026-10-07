@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/Ploos-AS/AmiRender/internal/engine"
 	"github.com/Ploos-AS/AmiRender/internal/engine/povray"
@@ -23,12 +24,14 @@ type message struct {
 	Job  json.RawMessage `json:"job"`
 	Name string          `json:"name,omitempty"`
 	Data string          `json:"data,omitempty"`
+	Asset string          `json:"asset,omitempty"`
 }
 
 type stagedResult struct {
 	Type  string `json:"type"`
 	Asset string `json:"asset,omitempty"`
 	Error string `json:"error,omitempty"`
+	Data  string `json:"data,omitempty"`
 }
 
 func Handle(c net.Conn) {
@@ -43,6 +46,10 @@ func Handle(c net.Conn) {
 		}
 		if m.Type == "UPLOAD" {
 			handleUpload(c, m)
+			continue
+		}
+		if m.Type == "DOWNLOAD" {
+			handleDownload(c, m)
 			continue
 		}
 		if m.Type != "SUBMIT" {
@@ -91,6 +98,23 @@ func handleUpload(c net.Conn, m message) {
 		return
 	}
 	_ = json.NewEncoder(c).Encode(stagedResult{Type: "STAGED", Asset: path})
+}
+
+func handleDownload(c net.Conn, m message) {
+	clean := filepath.Clean(m.Asset)
+	dir := filepath.Dir(clean)
+	if m.Asset == "" || !strings.HasPrefix(filepath.Base(dir), "amirender-asset-") {
+		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "unsafe asset reference"})
+		return
+	}
+	data, err := os.ReadFile(clean)
+	if err != nil || len(data) == 0 || len(data) > maxUploadBytes {
+		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "asset unavailable"})
+		return
+	}
+	_ = json.NewEncoder(c).Encode(stagedResult{
+		Type: "DATA", Asset: clean, Data: base64.StdEncoding.EncodeToString(data),
+	})
 }
 
 func renderPOVRay(c net.Conn, j farm.RenderJob) {
