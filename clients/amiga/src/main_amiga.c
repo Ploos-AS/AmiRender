@@ -4,11 +4,13 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define AMIRENDER_PORT 6800
 #define REPLY_SIZE 1024
 #define ASSET_SIZE 1024
 #define MAX_SCENE_SIZE 6000
+#define MAX_OUTPUT_SIZE 6000
 
 static const char *base_name(const char *path)
 {
@@ -51,11 +53,40 @@ static int read_scene(const char *path, unsigned char *buffer, size_t capacity, 
     return 0;
 }
 
+static int extract_output(const char *reply, char *output, size_t output_size)
+{
+    const char *key = "\"output\":\"";
+    const char *start = strstr(reply, key);
+    const char *end;
+    size_t length;
+
+    if (start == NULL) return -1;
+    start += strlen(key);
+    end = strchr(start, '\"');
+    if (end == NULL) return -1;
+    length = (size_t)(end - start);
+    if (length == 0 || length >= output_size) return -1;
+    memcpy(output, start, length);
+    output[length] = '\0';
+    return 0;
+}
+
+static int write_output(const char *path, const unsigned char *data, size_t length)
+{
+    FILE *file = fopen(path, "wb");
+    if (file == NULL) return -1;
+    if (fwrite(data, 1, length, file) != length) {
+        fclose(file);
+        return -1;
+    }
+    return fclose(file) == 0 ? 0 : -1;
+}
+
 static void usage(const char *program)
 {
     fprintf(stderr,
         "Usage: %s HOST SCENE OUTPUT [WIDTH HEIGHT]\n"
-        "Example: %s amirender.local DH0:Scenes/demo.pov RAM:frame.png 320 256\n",
+        "Example: %s 192.168.1.50 DH0:Scenes/demo.pov RAM:frame.png 320 256\n",
         program, program);
 }
 
@@ -66,8 +97,11 @@ int main(int argc, char **argv)
     struct amirender_job job;
     char reply[REPLY_SIZE];
     char asset[ASSET_SIZE];
+    char output_asset[ASSET_SIZE];
     unsigned char scene_data[MAX_SCENE_SIZE];
+    unsigned char output_data[MAX_OUTPUT_SIZE];
     size_t scene_size;
+    size_t output_size;
     int width = 0;
     int height = 0;
     int rc;
@@ -116,13 +150,24 @@ int main(int argc, char **argv)
 
     job.scene = asset;
     rc = amirender_submit_job(&transport, &job, reply, sizeof(reply));
-    amirender_bsdsocket_close(&socket_state);
-
-    if (rc != 0) {
+    if (rc != 0 || extract_output(reply, output_asset, sizeof(output_asset)) != 0) {
+        amirender_bsdsocket_close(&socket_state);
         fprintf(stderr, "AmiRender: render failed\n");
         return 10;
     }
 
-    printf("%s", reply);
+    rc = amirender_download_asset(
+        &transport, output_asset, output_data, sizeof(output_data), &output_size);
+    amirender_bsdsocket_close(&socket_state);
+    if (rc != 0) {
+        fprintf(stderr, "AmiRender: output download failed or exceeds %d bytes\n", MAX_OUTPUT_SIZE);
+        return 10;
+    }
+    if (write_output(argv[3], output_data, output_size) != 0) {
+        fprintf(stderr, "AmiRender: cannot write output %s\n", argv[3]);
+        return 10;
+    }
+
+    printf("AmiRender: wrote %lu bytes to %s\n", (unsigned long)output_size, argv[3]);
     return 0;
 }
