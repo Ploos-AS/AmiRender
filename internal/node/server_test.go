@@ -385,18 +385,26 @@ func TestUploadEndRequiresDeclaredSizeAndSingleCompletion(t *testing.T) {
 	dec := json.NewDecoder(bufio.NewReader(client))
 	send := func(m map[string]any) stagedResult {
 		t.Helper()
-		if err := enc.Encode(m); err != nil { t.Fatal(err) }
+		if err := enc.Encode(m); err != nil {
+			t.Fatal(err)
+		}
 		var result stagedResult
-		if err := dec.Decode(&result); err != nil { t.Fatal(err) }
+		if err := dec.Decode(&result); err != nil {
+			t.Fatal(err)
+		}
 		return result
 	}
 	begun := send(map[string]any{"type": "UPLOAD_BEGIN", "name": "partial.bin", "size": 9000})
-	if begun.Type != "STAGING" { t.Fatalf("begin: %#v", begun) }
+	if begun.Type != "STAGING" {
+		t.Fatalf("begin: %#v", begun)
+	}
 	defer os.RemoveAll(filepath.Dir(begun.Asset))
 	payload := base64.StdEncoding.EncodeToString(make([]byte, 4096))
 	for _, offset := range []int{0, 4096} {
 		ack := send(map[string]any{"type": "UPLOAD_CHUNK", "asset": begun.Asset, "offset": offset, "data": payload})
-		if ack.Type != "CHUNKED" { t.Fatalf("chunk: %#v", ack) }
+		if ack.Type != "CHUNKED" {
+			t.Fatalf("chunk: %#v", ack)
+		}
 	}
 	if result := send(map[string]any{"type": "UPLOAD_END", "asset": begun.Asset, "size": 8192}); result.Type != "FAILED" || result.Error != "upload size mismatch" {
 		t.Fatalf("changed declared size accepted: %#v", result)
