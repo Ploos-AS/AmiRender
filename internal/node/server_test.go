@@ -114,7 +114,7 @@ func TestUploadStagesAssetAndRejectsTraversal(t *testing.T) {
 		t.Fatal(err)
 	}
 	var staged stagedResult
-	if err := dec.Decode(&staged); err != nil { t.Fatal(err) }
+	if err := dec.Decode(&staged); err != nil {\n\t\tt.Fatal(err)\n\t}
 	if staged.Type != "STAGED" || staged.Asset == "" {
 		t.Fatalf("unexpected staging result: %#v", staged)
 	}
@@ -131,7 +131,7 @@ func TestUploadStagesAssetAndRejectsTraversal(t *testing.T) {
 		t.Fatal(err)
 	}
 	var rejected stagedResult
-	if err := dec.Decode(&rejected); err != nil { t.Fatal(err) }
+	if err := dec.Decode(&rejected); err != nil {\n\t\tt.Fatal(err)\n\t}
 	if rejected.Type != "FAILED" {
 		t.Fatalf("traversal upload was not rejected: %#v", rejected)
 	}
