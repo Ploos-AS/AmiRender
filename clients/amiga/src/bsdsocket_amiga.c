@@ -77,7 +77,29 @@ static int socket_send(void *context, const char *data, size_t length)
 static int socket_receive(void *context, char *buffer, size_t size)
 {
     struct amirender_bsdsocket *state = (struct amirender_bsdsocket *)context;
-    return recv(state->socket_fd, buffer, size, 0);
+    size_t received = 0;
+
+    if (buffer == NULL || size == 0) {
+        return -1;
+    }
+
+    while (received < size) {
+        int n = recv(state->socket_fd, buffer + received, size - received, 0);
+        size_t i;
+
+        if (n <= 0) {
+            return received > 0 ? (int)received : -1;
+        }
+
+        for (i = 0; i < (size_t)n; ++i) {
+            if (buffer[received + i] == '\n') {
+                return (int)(received + i + 1);
+            }
+        }
+        received += (size_t)n;
+    }
+
+    return (int)received;
 }
 
 int amirender_bsdsocket_connect(
