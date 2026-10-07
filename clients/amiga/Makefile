@@ -5,6 +5,7 @@ TARGET ?= amirender
 
 SOURCES = \
 	src/submit.c \
+	src/upload.c \
 	src/client.c \
 	src/bsdsocket_amiga.c \
 	src/main_amiga.c
