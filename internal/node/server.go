@@ -25,6 +25,8 @@ type message struct {
 	Name  string          `json:"name,omitempty"`
 	Data  string          `json:"data,omitempty"`
 	Asset string          `json:"asset,omitempty"`
+	Offset int64           `json:"offset,omitempty"`
+	Size int64             `json:"size,omitempty"`
 }
 
 type stagedResult struct {
@@ -32,6 +34,9 @@ type stagedResult struct {
 	Asset string `json:"asset,omitempty"`
 	Error string `json:"error,omitempty"`
 	Data  string `json:"data,omitempty"`
+	Offset int64  `json:"offset,omitempty"`
+	Size int64    `json:"size,omitempty"`
+	EOF bool      `json:"eof,omitempty"`
 }
 
 func Handle(c net.Conn) {
@@ -46,6 +51,18 @@ func Handle(c net.Conn) {
 		}
 		if m.Type == "UPLOAD" {
 			handleUpload(c, m)
+			continue
+		}
+		if m.Type == "UPLOAD_BEGIN" {
+			handleUploadBegin(c, m)
+			continue
+		}
+		if m.Type == "UPLOAD_CHUNK" {
+			handleUploadChunk(c, m)
+			continue
+		}
+		if m.Type == "DOWNLOAD_CHUNK" {
+			handleDownloadChunk(c, m)
 			continue
 		}
 		if m.Type == "DOWNLOAD" {
@@ -74,6 +91,94 @@ func Handle(c net.Conn) {
 			})
 		}
 	}
+}
+
+func validStagedAsset(asset string) (string, bool) {
+	clean := filepath.Clean(asset)
+	dir := filepath.Dir(clean)
+	return clean, asset != "" && strings.HasPrefix(filepath.Base(dir), "amirender-asset-")
+}
+
+func handleUploadBegin(c net.Conn, m message) {
+	if filepath.Base(m.Name) != m.Name || m.Name == "." || m.Name == "" || m.Size <= 0 || m.Size > maxUploadBytes {
+		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "invalid upload"})
+		return
+	}
+	dir, err := os.MkdirTemp("", "amirender-asset-")
+	if err != nil {
+		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "staging failed"})
+		return
+	}
+	path := filepath.Join(dir, m.Name)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil {
+		_ = os.RemoveAll(dir)
+		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "staging failed"})
+		return
+	}
+	_ = file.Close()
+	_ = json.NewEncoder(c).Encode(stagedResult{Type: "STAGING", Asset: path, Size: m.Size})
+}
+
+func handleUploadChunk(c net.Conn, m message) {
+	clean, ok := validStagedAsset(m.Asset)
+	if !ok || m.Offset < 0 {
+		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "unsafe asset reference"})
+		return
+	}
+	data, err := base64.StdEncoding.DecodeString(m.Data)
+	if err != nil || len(data) == 0 || len(data) > 4096 || m.Offset+int64(len(data)) > maxUploadBytes {
+		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "invalid chunk"})
+		return
+	}
+	file, err := os.OpenFile(clean, os.O_WRONLY, 0600)
+	if err != nil {
+		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "asset unavailable"})
+		return
+	}
+	info, statErr := file.Stat()
+	if statErr != nil || info.Size() != m.Offset {
+		_ = file.Close()
+		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "unexpected chunk offset"})
+		return
+	}
+	_, err = file.WriteAt(data, m.Offset)
+	_ = file.Close()
+	if err != nil {
+		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "staging failed"})
+		return
+	}
+	_ = json.NewEncoder(c).Encode(stagedResult{Type: "CHUNKED", Asset: clean, Offset: m.Offset + int64(len(data))})
+}
+
+func handleDownloadChunk(c net.Conn, m message) {
+	clean, ok := validStagedAsset(m.Asset)
+	if !ok || m.Offset < 0 || m.Size <= 0 || m.Size > 4096 {
+		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "invalid chunk request"})
+		return
+	}
+	file, err := os.Open(clean)
+	if err != nil {
+		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "asset unavailable"})
+		return
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil || m.Offset > info.Size() {
+		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "invalid chunk offset"})
+		return
+	}
+	buf := make([]byte, m.Size)
+	n, err := file.ReadAt(buf, m.Offset)
+	if err != nil && n == 0 {
+		if m.Offset == info.Size() {
+			_ = json.NewEncoder(c).Encode(stagedResult{Type: "DATA", Asset: clean, Offset: m.Offset, Size: 0, EOF: true})
+			return
+		}
+		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "asset unavailable"})
+		return
+	}
+	_ = json.NewEncoder(c).Encode(stagedResult{Type: "DATA", Asset: clean, Offset: m.Offset, Size: int64(n), Data: base64.StdEncoding.EncodeToString(buf[:n]), EOF: m.Offset+int64(n) >= info.Size()})
 }
 
 func handleUpload(c net.Conn, m message) {
