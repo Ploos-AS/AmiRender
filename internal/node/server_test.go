@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -81,10 +82,14 @@ sphere { <0, 0, 0>, 1 pigment { color rgb <0.7, 0.7, 0.7> } }
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Type != "COMPLETE" || result.Output != output {
+	if result.Type != "COMPLETE" || result.Output == "" || result.Output == output {
 		t.Fatalf("unexpected result: %#v", result)
 	}
-	info, err := os.Stat(output)
+	if !strings.HasPrefix(filepath.Base(filepath.Dir(result.Output)), "amirender-asset-") {
+		t.Fatalf("output is not worker-staged: %q", result.Output)
+	}
+	defer os.RemoveAll(filepath.Dir(result.Output))
+	info, err := os.Stat(result.Output)
 	if err != nil {
 		t.Fatalf("render output missing: %v", err)
 	}
