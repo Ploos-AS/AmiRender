@@ -98,7 +98,6 @@ sphere { <0, 0, 0>, 1 pigment { color rgb <0.7, 0.7, 0.7> } }
 	}
 }
 
-
 func TestPOVRayUploadRenderDownloadRoundTrip(t *testing.T) {
 	if _, err := exec.LookPath("povray"); err != nil {
 		t.Skip("povray not installed")
