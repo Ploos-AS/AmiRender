@@ -61,6 +61,10 @@ func Handle(c net.Conn) {
 			handleUploadChunk(c, m)
 			continue
 		}
+		if m.Type == "UPLOAD_END" {
+			handleUploadEnd(c, m)
+			continue
+		}
 		if m.Type == "DOWNLOAD_CHUNK" {
 			handleDownloadChunk(c, m)
 			continue
@@ -149,6 +153,24 @@ func handleUploadChunk(c net.Conn, m message) {
 		return
 	}
 	_ = json.NewEncoder(c).Encode(stagedResult{Type: "CHUNKED", Asset: clean, Offset: m.Offset + int64(len(data))})
+}
+
+func handleUploadEnd(c net.Conn, m message) {
+	clean, ok := validStagedAsset(m.Asset)
+	if !ok || m.Size <= 0 || m.Size > maxUploadBytes {
+		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "invalid upload completion"})
+		return
+	}
+	info, err := os.Stat(clean)
+	if err != nil {
+		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "asset unavailable"})
+		return
+	}
+	if info.Size() != m.Size {
+		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "incomplete upload", Size: info.Size()})
+		return
+	}
+	_ = json.NewEncoder(c).Encode(stagedResult{Type: "STAGED", Asset: clean, Size: info.Size()})
 }
 
 func handleDownloadChunk(c net.Conn, m message) {
