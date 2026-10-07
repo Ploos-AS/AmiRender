@@ -98,6 +98,84 @@ sphere { <0, 0, 0>, 1 pigment { color rgb <0.7, 0.7, 0.7> } }
 	}
 }
 
+
+func TestPOVRayUploadRenderDownloadRoundTrip(t *testing.T) {
+	if _, err := exec.LookPath("povray"); err != nil {
+		t.Skip("povray not installed")
+	}
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go func() { _ = Serve(ln) }()
+
+	conn, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	enc := json.NewEncoder(conn)
+	dec := json.NewDecoder(bufio.NewReader(conn))
+
+	source := `camera { location <0, 0, -3> look_at <0, 0, 0> }
+light_source { <-2, 3, -4> color rgb <1, 1, 1> }
+sphere { <0, 0, 0>, 1 pigment { color rgb <0.7, 0.7, 0.7> } }
+`
+	if err := enc.Encode(map[string]string{
+		"type": "UPLOAD", "name": "scene.pov",
+		"data": base64.StdEncoding.EncodeToString([]byte(source)),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var staged stagedResult
+	if err := dec.Decode(&staged); err != nil {
+		t.Fatal(err)
+	}
+	if staged.Type != "STAGED" || staged.Asset == "" {
+		t.Fatalf("unexpected staging result: %#v", staged)
+	}
+	defer os.RemoveAll(filepath.Dir(staged.Asset))
+
+	if err := enc.Encode(map[string]any{
+		"type": "SUBMIT",
+		"job": map[string]any{
+			"id": "pov-wire-e2e", "engine": "povray", "scene": staged.Asset,
+			"output": "RAM:frame.png", "width": 64, "height": 48,
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var rendered stagedResult
+	if err := dec.Decode(&rendered); err != nil {
+		t.Fatal(err)
+	}
+	if rendered.Type != "COMPLETE" || rendered.Output == "" || rendered.Output == "RAM:frame.png" {
+		t.Fatalf("unexpected render result: %#v", rendered)
+	}
+	defer os.RemoveAll(filepath.Dir(rendered.Output))
+
+	if err := enc.Encode(map[string]string{"type": "DOWNLOAD", "asset": rendered.Output}); err != nil {
+		t.Fatal(err)
+	}
+	var downloaded stagedResult
+	if err := dec.Decode(&downloaded); err != nil {
+		t.Fatal(err)
+	}
+	if downloaded.Type != "DATA" {
+		t.Fatalf("unexpected download result: %#v", downloaded)
+	}
+	png, err := base64.StdEncoding.DecodeString(downloaded.Data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signature := []byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a}
+	if len(png) <= len(signature) || string(png[:len(signature)]) != string(signature) {
+		t.Fatalf("download is not a PNG: %x", png[:min(len(png), len(signature))])
+	}
+}
+
 func TestDownloadReturnsStagedAsset(t *testing.T) {
 	dir, err := os.MkdirTemp("", "amirender-asset-")
 	if err != nil {
