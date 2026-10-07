@@ -1,7 +1,10 @@
 package node
 
 import (
+	"bufio"
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"net"
 	"os"
 	"os/exec"
@@ -88,4 +91,32 @@ sphere { <0, 0, 0>, 1 pigment { color rgb <0.7, 0.7, 0.7> } }
 	if info.Size() == 0 {
 		t.Fatal("render output is empty")
 	}
+}
+
+func TestUploadStagesAssetAndRejectsTraversal(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil { t.Fatal(err) }
+	defer ln.Close()
+	go func() { _ = Serve(ln) }()
+
+	conn, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil { t.Fatal(err) }
+	defer conn.Close()
+	enc := json.NewEncoder(conn)
+	dec := json.NewDecoder(bufio.NewReader(conn))
+
+	data := base64.StdEncoding.EncodeToString([]byte("camera {}\n"))
+	if err := enc.Encode(map[string]string{"type":"UPLOAD", "name":"scene.pov", "data":data}); err != nil { t.Fatal(err) }
+	var staged stagedResult
+	if err := dec.Decode(&staged); err != nil { t.Fatal(err) }
+	if staged.Type != "STAGED" || staged.Asset == "" { t.Fatalf("unexpected staging result: %#v", staged) }
+	defer os.RemoveAll(filepath.Dir(staged.Asset))
+	got, err := os.ReadFile(staged.Asset)
+	if err != nil { t.Fatal(err) }
+	if string(got) != "camera {}\n" { t.Fatalf("unexpected staged data %q", got) }
+
+	if err := enc.Encode(map[string]string{"type":"UPLOAD", "name":"../escape.pov", "data":data}); err != nil { t.Fatal(err) }
+	var rejected stagedResult
+	if err := dec.Decode(&rejected); err != nil { t.Fatal(err) }
+	if rejected.Type != "FAILED" { t.Fatalf("traversal upload was not rejected: %#v", rejected) }
 }
