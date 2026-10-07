@@ -93,7 +93,6 @@ sphere { <0, 0, 0>, 1 pigment { color rgb <0.7, 0.7, 0.7> } }
 	}
 }
 
-
 func TestDownloadReturnsStagedAsset(t *testing.T) {
 	dir, err := os.MkdirTemp("", "amirender-asset-")
 	if err != nil {
