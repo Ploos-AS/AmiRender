@@ -47,6 +47,18 @@ Native formats are first-class preservation inputs/outputs. Planned examples inc
 
 POV-Ray and Blender are first-class modern Linux farm backends. The scheduler is intended to support amd64 and ARM64 CPU workers and GPU-capable workers where the backend supports them. Retro scene import is independent of the renderer: a preserved classic scene may be rendered in original/authentic mode or sent through the same modern farm in enhanced mode.
 
+## Landscape roadmap
+
+Landscape generation is a first-class render source, with AmiTerrain owning terrain semantics and format compatibility.
+
+- Preserve Vista/VistaPro, Scenery Animator, World Construction Set and other supported classic landscape inputs through AmiTerrain.
+- Render preserved landscape scenes in `original`, `authentic`, or `enhanced` mode.
+- Accept AmiTerrain Terrain IR without discarding native source metadata.
+- Use POV-Ray and Blender/Cycles/Eevee as modern Linux farm targets for enhanced landscape rendering.
+- Support modern open-source terrain workflows through AmiTerrain interchange, including TerraForge3D, Blender terrain/erosion workflows, generic heightmaps, meshes and DEM/GIS-derived terrain.
+- Keep reverse conversion possible where representable: modern terrain may be reduced/quantized into formats usable by original classic landscape software.
+- AmiRender does not replace AmiTerrain's importers or generators; it schedules and renders their outputs.
+
 ## User experience
 
 From AmigaOS, AmiRender should feel like an external render coprocessor, not like a Linux server.
