@@ -452,4 +452,45 @@ func TestPOVRayRejectsUnfinishedUpload(t *testing.T) {
 	if rejected.Type != "FAILED" || rejected.Error != "scene upload incomplete" {
 		t.Fatalf("unfinished upload was rendered: %#v", rejected)
 	}
+	payload := base64.StdEncoding.EncodeToString([]byte("camera {}"))
+	if err := enc.Encode(map[string]any{
+		"type": "UPLOAD_CHUNK", "asset": begun.Asset, "offset": 0, "data": payload,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var chunk stagedResult
+	if err := dec.Decode(&chunk); err != nil {
+		t.Fatal(err)
+	}
+	if chunk.Type != "CHUNKED" || chunk.Offset != 9 {
+		t.Fatalf("unexpected chunk: %#v", chunk)
+	}
+	if err := enc.Encode(map[string]any{
+		"type": "UPLOAD_CHUNK", "asset": begun.Asset, "offset": 9,
+		"data": base64.StdEncoding.EncodeToString([]byte("\\n")),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := dec.Decode(&chunk); err != nil {
+		t.Fatal(err)
+	}
+	if chunk.Type != "CHUNKED" || chunk.Offset != 10 {
+		t.Fatalf("unexpected final chunk: %#v", chunk)
+	}
+	if err := enc.Encode(map[string]any{"type": "UPLOAD_END", "asset": begun.Asset, "size": 10}); err != nil {
+		t.Fatal(err)
+	}
+	var staged stagedResult
+	if err := dec.Decode(&staged); err != nil {
+		t.Fatal(err)
+	}
+	if staged.Type != "STAGED" {
+		t.Fatalf("completed upload rejected: %#v", staged)
+	}
+	uploadSessions.Lock()
+	_, pending := uploadSessions.expected[begun.Asset]
+	uploadSessions.Unlock()
+	if pending {
+		t.Fatal("completed upload remains blocked")
+	}
 }
