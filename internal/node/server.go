@@ -10,11 +10,17 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/Ploos-AS/AmiRender/internal/engine"
 	"github.com/Ploos-AS/AmiRender/internal/engine/povray"
 	"github.com/Ploos-AS/AmiRender/internal/farm"
 )
+
+var uploadSessions = struct {
+	sync.Mutex
+	expected map[string]int64
+}{expected: make(map[string]int64)}
 
 const maxUploadBytes = 1024 * 1024
 const maxMessageBytes = 2 * 1024 * 1024
@@ -121,6 +127,9 @@ func handleUploadBegin(c net.Conn, m message) {
 		return
 	}
 	_ = file.Close()
+	uploadSessions.Lock()
+	uploadSessions.expected[path] = m.Size
+	uploadSessions.Unlock()
 	_ = json.NewEncoder(c).Encode(stagedResult{Type: "STAGING", Asset: path, Size: m.Size})
 }
 
@@ -161,6 +170,13 @@ func handleUploadEnd(c net.Conn, m message) {
 		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "invalid upload completion"})
 		return
 	}
+	uploadSessions.Lock()
+	expected, exists := uploadSessions.expected[clean]
+	uploadSessions.Unlock()
+	if !exists || expected != m.Size {
+		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "upload size mismatch"})
+		return
+	}
 	info, err := os.Stat(clean)
 	if err != nil {
 		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "asset unavailable"})
@@ -170,6 +186,9 @@ func handleUploadEnd(c net.Conn, m message) {
 		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "incomplete upload", Size: info.Size()})
 		return
 	}
+	uploadSessions.Lock()
+	delete(uploadSessions.expected, clean)
+	uploadSessions.Unlock()
 	_ = json.NewEncoder(c).Encode(stagedResult{Type: "STAGED", Asset: clean, Size: info.Size()})
 }
 
