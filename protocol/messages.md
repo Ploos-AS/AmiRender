@@ -35,3 +35,33 @@ The controller acknowledges a valid registration:
 ```
 
 Registration is the M1 discovery baseline. Network service discovery such as mDNS may locate controllers/workers later, but capability truth comes from the registration protocol.
+
+
+## UPLOAD
+
+A client may stage one small render asset on a worker before submitting a job.
+M1 uses base64 inside the existing newline-delimited JSON framing.
+
+```json
+{"type":"UPLOAD","name":"scene.pov","data":"Y2FtZXJhIHt9Cg=="}
+```
+
+M1 constraints:
+
+- decoded payload size is limited to 1 MiB;
+- `name` is a basename only; directory traversal and client-selected worker paths are rejected;
+- the worker creates an isolated staging directory and chooses the filesystem path;
+- staged files are private to the worker and are not a durable asset store;
+- M1 initially targets a self-contained single-file POV-Ray scene. Includes, textures and multi-file bundles require a later asset-manifest protocol.
+
+## STAGED
+
+A successful upload returns the worker-selected asset reference:
+
+```json
+{"type":"STAGED","asset":"/worker-selected/staging/path/scene.pov"}
+```
+
+The path is an opaque M1 asset reference from the client's perspective. Clients must not construct, modify, or predict it. A following `SUBMIT` may use this returned reference as its scene value.
+
+Invalid names, invalid base64, empty data, oversized data, or staging failures return `FAILED`.
