@@ -423,3 +423,33 @@ func TestUploadEndRequiresDeclaredSizeAndSingleCompletion(t *testing.T) {
 		t.Fatalf("duplicate completion accepted: %#v", result)
 	}
 }
+
+func TestPOVRayRejectsUnfinishedUpload(t *testing.T) {
+	server, client := net.Pipe()
+	defer client.Close()
+	go Handle(server)
+	enc := json.NewEncoder(client)
+	dec := json.NewDecoder(bufio.NewReader(client))
+	if err := enc.Encode(map[string]any{"type": "UPLOAD_BEGIN", "name": "pending.pov", "size": 10}); err != nil {
+		t.Fatal(err)
+	}
+	var begun stagedResult
+	if err := dec.Decode(&begun); err != nil {
+		t.Fatal(err)
+	}
+	if begun.Type != "STAGING" {
+		t.Fatalf("unexpected begin: %#v", begun)
+	}
+	defer os.RemoveAll(filepath.Dir(begun.Asset))
+	job := farm.RenderJob{ID: "unfinished", Engine: "povray", Scene: begun.Asset, Output: "RAM:frame.png"}
+	if err := enc.Encode(map[string]any{"type": "SUBMIT", "job": job}); err != nil {
+		t.Fatal(err)
+	}
+	var rejected farm.WorkerResult
+	if err := dec.Decode(&rejected); err != nil {
+		t.Fatal(err)
+	}
+	if rejected.Type != "FAILED" || rejected.Error != "scene upload incomplete" {
+		t.Fatalf("unfinished upload was rendered: %#v", rejected)
+	}
+}
