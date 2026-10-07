@@ -109,12 +109,14 @@ func TestUploadStagesAssetAndRejectsTraversal(t *testing.T) {
 	enc := json.NewEncoder(conn)
 	dec := json.NewDecoder(bufio.NewReader(conn))
 
-	data := base64.StdEncoding.EncodeToString([]byte("camera {}\n"))
+	data := base64.StdEncoding.EncodeToString([]byte("camera {}\\n"))
 	if err := enc.Encode(map[string]string{"type": "UPLOAD", "name": "scene.pov", "data": data}); err != nil {
 		t.Fatal(err)
 	}
 	var staged stagedResult
-	if err := dec.Decode(&staged); err != nil {\n\t\tt.Fatal(err)\n\t}
+	if err := dec.Decode(&staged); err != nil {
+		t.Fatal(err)
+	}
 	if staged.Type != "STAGED" || staged.Asset == "" {
 		t.Fatalf("unexpected staging result: %#v", staged)
 	}
@@ -123,7 +125,7 @@ func TestUploadStagesAssetAndRejectsTraversal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(got) != "camera {}\n" {
+	if string(got) != "camera {}\\n" {
 		t.Fatalf("unexpected staged data %q", got)
 	}
 
@@ -131,7 +133,9 @@ func TestUploadStagesAssetAndRejectsTraversal(t *testing.T) {
 		t.Fatal(err)
 	}
 	var rejected stagedResult
-	if err := dec.Decode(&rejected); err != nil {\n\t\tt.Fatal(err)\n\t}
+	if err := dec.Decode(&rejected); err != nil {
+		t.Fatal(err)
+	}
 	if rejected.Type != "FAILED" {
 		t.Fatalf("traversal upload was not rejected: %#v", rejected)
 	}
