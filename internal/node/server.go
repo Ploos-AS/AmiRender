@@ -118,11 +118,20 @@ func handleDownload(c net.Conn, m message) {
 }
 
 func renderPOVRay(c net.Conn, j farm.RenderJob) {
+	dir, err := os.MkdirTemp("", "amirender-asset-")
+	if err != nil {
+		writeResult(c, farm.WorkerResult{
+			Type: "FAILED", JobID: j.ID, Engine: "povray", Error: "output staging failed",
+		})
+		return
+	}
+	output := filepath.Join(dir, "frame.png")
 	e := povray.New("")
 	result, err := e.Render(context.Background(), engine.Job{
-		ID: j.ID, Scene: j.Scene, Output: j.Output, Frame: j.Frame, Width: j.Width, Height: j.Height,
+		ID: j.ID, Scene: j.Scene, Output: output, Frame: j.Frame, Width: j.Width, Height: j.Height,
 	})
 	if err != nil {
+		_ = os.RemoveAll(dir)
 		writeResult(c, farm.WorkerResult{
 			Type: "FAILED", JobID: j.ID, Engine: "povray", Error: err.Error(),
 		})
