@@ -698,3 +698,57 @@ func TestValidStagedAssetRejectsSymlinksAndOutsideTemp(t *testing.T) {
 		t.Fatal("valid staging asset rejected")
 	}
 }
+
+func TestOpaqueAssetIDChunkedUpload(t *testing.T) {
+	server, client := net.Pipe()
+	defer client.Close()
+	go Handle(server)
+	enc := json.NewEncoder(client)
+	dec := json.NewDecoder(client)
+	payload := []byte("camera {}\n")
+	if err := enc.Encode(map[string]any{"type": "UPLOAD_BEGIN", "name": "opaque.pov", "size": len(payload)}); err != nil {
+		t.Fatal(err)
+	}
+	var begun stagedResult
+	if err := dec.Decode(&begun); err != nil {
+		t.Fatal(err)
+	}
+	if begun.Type != "STAGING" || !strings.HasPrefix(begun.ID, "asset-") {
+		t.Fatalf("missing opaque asset ID: %#v", begun)
+	}
+	defer os.RemoveAll(filepath.Dir(begun.Asset))
+	if err := enc.Encode(map[string]any{"type": "UPLOAD_CHUNK", "asset": begun.ID, "offset": 0, "data": base64.StdEncoding.EncodeToString(payload)}); err != nil {
+		t.Fatal(err)
+	}
+	var chunk stagedResult
+	if err := dec.Decode(&chunk); err != nil {
+		t.Fatal(err)
+	}
+	if chunk.Type != "CHUNKED" || chunk.Offset != int64(len(payload)) {
+		t.Fatalf("opaque chunk failed: %#v", chunk)
+	}
+	if err := enc.Encode(map[string]any{"type": "UPLOAD_END", "asset": begun.ID, "size": len(payload)}); err != nil {
+		t.Fatal(err)
+	}
+	var end stagedResult
+	if err := dec.Decode(&end); err != nil {
+		t.Fatal(err)
+	}
+	if end.Type != "STAGED" {
+		t.Fatalf("opaque finalization failed: %#v", end)
+	}
+	data, err := os.ReadFile(begun.Asset)
+	if err != nil || string(data) != string(payload) {
+		t.Fatalf("uploaded asset mismatch: %q, %v", data, err)
+	}
+	if err := enc.Encode(map[string]any{"type": "UPLOAD_CHUNK", "asset": "asset-unknown", "offset": 0, "data": base64.StdEncoding.EncodeToString(payload)}); err != nil {
+		t.Fatal(err)
+	}
+	var rejected stagedResult
+	if err := dec.Decode(&rejected); err != nil {
+		t.Fatal(err)
+	}
+	if rejected.Type != "FAILED" {
+		t.Fatalf("unknown opaque asset ID accepted: %#v", rejected)
+	}
+}
