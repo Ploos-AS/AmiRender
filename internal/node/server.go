@@ -292,7 +292,7 @@ func handleUploadEnd(c net.Conn, m message) {
 }
 
 func handleDownloadChunk(c net.Conn, m message) {
-	clean, ok := validStagedAsset(m.Asset)
+	clean, ok := validStagedAsset(resolveUploadAsset(m.Asset))
 	if !ok || m.Offset < 0 || m.Size <= 0 || m.Size > 4096 {
 		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "invalid chunk request"})
 		return
@@ -346,9 +346,8 @@ func handleUpload(c net.Conn, m message) {
 }
 
 func handleDownload(c net.Conn, m message) {
-	clean := filepath.Clean(m.Asset)
-	dir := filepath.Dir(clean)
-	if m.Asset == "" || !strings.HasPrefix(filepath.Base(dir), "amirender-asset-") {
+	clean, ok := validStagedAsset(resolveUploadAsset(m.Asset))
+	if !ok {
 		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "unsafe asset reference"})
 		return
 	}
