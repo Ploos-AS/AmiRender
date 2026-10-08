@@ -52,6 +52,17 @@ func newAssetID(path string) (string, error) {
 	return id, nil
 }
 
+// resolveUploadAsset accepts opaque IDs and legacy paths during migration.
+func resolveUploadAsset(asset string) string {
+	if !strings.HasPrefix(asset, "asset-") {
+		return asset
+	}
+	assetIDs.Lock()
+	path := assetIDs.paths[asset]
+	assetIDs.Unlock()
+	return path
+}
+
 const maxUploadBytes = 1024 * 1024
 const maxMessageBytes = 2 * 1024 * 1024
 
@@ -213,7 +224,7 @@ func handleUploadBegin(c net.Conn, m message) {
 }
 
 func handleUploadChunk(c net.Conn, m message) {
-	clean, ok := validStagedAsset(m.Asset)
+	clean, ok := validStagedAsset(resolveUploadAsset(m.Asset))
 	if !ok || m.Offset < 0 {
 		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "unsafe asset reference"})
 		return
@@ -255,7 +266,7 @@ func handleUploadChunk(c net.Conn, m message) {
 }
 
 func handleUploadEnd(c net.Conn, m message) {
-	clean, ok := validStagedAsset(m.Asset)
+	clean, ok := validStagedAsset(resolveUploadAsset(m.Asset))
 	if !ok || m.Size <= 0 || m.Size > maxUploadBytes {
 		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "invalid upload completion"})
 		return
