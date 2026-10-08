@@ -497,8 +497,15 @@ func TestPOVRayRejectsUnfinishedUpload(t *testing.T) {
 
 func TestCleanupExpiredUploadsPreservesActiveSessions(t *testing.T) {
 	now := time.Now()
-	expiredDir := t.TempDir()
-	activeDir := t.TempDir()
+	root := t.TempDir()
+	expiredDir, err := os.MkdirTemp(root, "amirender-asset-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	activeDir, err := os.MkdirTemp(root, "amirender-asset-")
+	if err != nil {
+		t.Fatal(err)
+	}
 	expiredPath := filepath.Join(expiredDir, "old.pov")
 	activePath := filepath.Join(activeDir, "new.pov")
 	for _, path := range []string{expiredPath, activePath} {
@@ -507,8 +514,8 @@ func TestCleanupExpiredUploadsPreservesActiveSessions(t *testing.T) {
 		}
 	}
 	uploadSessions.Lock()
-	uploadSessions.expected[expiredPath] = uploadSession{size: 5, created: now.Add(-uploadSessionTTL - time.Second)}
-	uploadSessions.expected[activePath] = uploadSession{size: 5, created: now.Add(-uploadSessionTTL + time.Second)}
+	uploadSessions.expected[expiredPath] = uploadSession{size: 5, created: now.Add(-uploadSessionTTL - time.Second), dir: expiredDir}
+	uploadSessions.expected[activePath] = uploadSession{size: 5, created: now.Add(-uploadSessionTTL + time.Second), dir: activeDir}
 	uploadSessions.Unlock()
 	defer func() {
 		uploadSessions.Lock()
