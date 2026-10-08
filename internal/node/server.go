@@ -184,6 +184,16 @@ func cleanupExpiredUploads(now time.Time) {
 		}
 	}
 	uploadSessions.Unlock()
+	assetIDs.Lock()
+	for id, path := range assetIDs.paths {
+		for _, dir := range expired {
+			if filepath.Dir(path) == dir {
+				delete(assetIDs.paths, id)
+				break
+			}
+		}
+	}
+	assetIDs.Unlock()
 	for _, dir := range expired {
 		if dir == "" || !strings.HasPrefix(filepath.Base(dir), "amirender-asset-") {
 			continue
