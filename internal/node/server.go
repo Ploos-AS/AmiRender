@@ -66,6 +66,7 @@ type message struct {
 }
 
 type stagedResult struct {
+	ID     string `json:"id,omitempty"`
 	Type   string `json:"type"`
 	Asset  string `json:"asset,omitempty"`
 	Error  string `json:"error,omitempty"`
@@ -199,7 +200,8 @@ func handleUploadBegin(c net.Conn, m message) {
 		return
 	}
 	_ = file.Close()
-	if _, err := newAssetID(path); err != nil {
+	id, err := newAssetID(path)
+	if err != nil {
 		_ = os.RemoveAll(dir)
 		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "asset registration failed"})
 		return
@@ -207,7 +209,7 @@ func handleUploadBegin(c net.Conn, m message) {
 	uploadSessions.Lock()
 	uploadSessions.expected[path] = uploadSession{size: m.Size, created: time.Now(), dir: dir}
 	uploadSessions.Unlock()
-	_ = json.NewEncoder(c).Encode(stagedResult{Type: "STAGING", Asset: path, Size: m.Size})
+	_ = json.NewEncoder(c).Encode(stagedResult{Type: "STAGING", ID: id, Asset: path, Size: m.Size})
 }
 
 func handleUploadChunk(c net.Conn, m message) {
