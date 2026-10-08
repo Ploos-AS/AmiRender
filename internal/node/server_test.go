@@ -752,3 +752,71 @@ func TestOpaqueAssetIDChunkedUpload(t *testing.T) {
 		t.Fatalf("unknown opaque asset ID accepted: %#v", rejected)
 	}
 }
+
+func TestOpaqueAssetIDDownload(t *testing.T) {
+	server, client := net.Pipe()
+	defer client.Close()
+	go Handle(server)
+	enc := json.NewEncoder(client)
+	dec := json.NewDecoder(client)
+	payload := []byte("opaque download")
+	if err := enc.Encode(map[string]any{"type": "UPLOAD_BEGIN", "name": "download.bin", "size": len(payload)}); err != nil {
+		t.Fatal(err)
+	}
+	var begun stagedResult
+	if err := dec.Decode(&begun); err != nil {
+		t.Fatal(err)
+	}
+	if begun.Type != "STAGING" || begun.ID == "" {
+		t.Fatalf("missing asset ID: %#v", begun)
+	}
+	defer os.RemoveAll(filepath.Dir(begun.Asset))
+	if err := enc.Encode(map[string]any{"type": "UPLOAD_CHUNK", "asset": begun.ID, "offset": 0, "data": base64.StdEncoding.EncodeToString(payload)}); err != nil {
+		t.Fatal(err)
+	}
+	var chunk stagedResult
+	if err := dec.Decode(&chunk); err != nil {
+		t.Fatal(err)
+	}
+	if chunk.Type != "CHUNKED" {
+		t.Fatalf("chunk upload failed: %#v", chunk)
+	}
+	if err := enc.Encode(map[string]any{"type": "UPLOAD_END", "asset": begun.ID, "size": len(payload)}); err != nil {
+		t.Fatal(err)
+	}
+	var completed stagedResult
+	if err := dec.Decode(&completed); err != nil {
+		t.Fatal(err)
+	}
+	if completed.Type != "STAGED" {
+		t.Fatalf("finalization failed: %#v", completed)
+	}
+	for _, typ := range []string{"DOWNLOAD", "DOWNLOAD_CHUNK"} {
+		req := map[string]any{"type": typ, "asset": begun.ID}
+		if typ == "DOWNLOAD_CHUNK" {
+			req["offset"] = 0
+			req["size"] = 4096
+		}
+		if err := enc.Encode(req); err != nil {
+			t.Fatal(err)
+		}
+		var result stagedResult
+		if err := dec.Decode(&result); err != nil {
+			t.Fatal(err)
+		}
+		data, err := base64.StdEncoding.DecodeString(result.Data)
+		if err != nil || result.Type != "DATA" || string(data) != string(payload) {
+			t.Fatalf("%s failed: %#v, %v", typ, result, err)
+		}
+	}
+	if err := enc.Encode(map[string]any{"type": "DOWNLOAD", "asset": "asset-unknown"}); err != nil {
+		t.Fatal(err)
+	}
+	var rejected stagedResult
+	if err := dec.Decode(&rejected); err != nil {
+		t.Fatal(err)
+	}
+	if rejected.Type != "FAILED" {
+		t.Fatalf("unknown asset ID accepted: %#v", rejected)
+	}
+}
