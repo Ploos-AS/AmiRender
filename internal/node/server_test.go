@@ -538,3 +538,30 @@ func TestCleanupExpiredUploadsPreservesActiveSessions(t *testing.T) {
 		t.Fatalf("active file removed: %v", err)
 	}
 }
+
+func TestCleanupExpiredUploadsDoesNotDeleteUnregisteredDirectory(t *testing.T) {
+	now := time.Now()
+	root := t.TempDir()
+	unregistered := filepath.Join(root, "other-project")
+	if err := os.Mkdir(unregistered, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(unregistered, "keep.txt")
+	if err := os.WriteFile(path, []byte("keep"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	uploadSessions.Lock()
+	uploadSessions.expected[path] = uploadSession{
+		size: 4, created: now.Add(-uploadSessionTTL - time.Second), dir: unregistered,
+	}
+	uploadSessions.Unlock()
+	defer func() {
+		uploadSessions.Lock()
+		delete(uploadSessions.expected, path)
+		uploadSessions.Unlock()
+	}()
+	cleanupExpiredUploads(now)
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("unregistered directory was removed: %v", err)
+	}
+}
