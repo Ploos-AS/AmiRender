@@ -219,8 +219,8 @@ func handleUploadEnd(c net.Conn, m message) {
 		return
 	}
 	uploadSessions.Lock()
+	defer uploadSessions.Unlock()
 	expected, exists := uploadSessions.expected[clean]
-	uploadSessions.Unlock()
 	if !exists || expected.size != m.Size {
 		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "upload size mismatch"})
 		return
@@ -234,9 +234,7 @@ func handleUploadEnd(c net.Conn, m message) {
 		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "incomplete upload", Size: info.Size()})
 		return
 	}
-	uploadSessions.Lock()
 	delete(uploadSessions.expected, clean)
-	uploadSessions.Unlock()
 	_ = json.NewEncoder(c).Encode(stagedResult{Type: "STAGED", Asset: clean, Size: info.Size()})
 }
 
