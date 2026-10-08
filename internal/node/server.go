@@ -38,7 +38,7 @@ var uploadSessions = struct {
 // until the protocol and Amiga client can switch to opaque identifiers.
 var assetIDs = struct {
 	sync.Mutex
-	paths map[string]string
+	paths     map[string]string
 	completed map[string]time.Time
 }{paths: make(map[string]string), completed: make(map[string]time.Time)}
 
@@ -442,7 +442,7 @@ func Serve(ln net.Listener) error {
 			select {
 			case now := <-ticker.C:
 				cleanupExpiredUploads(now)
-			cleanupCompletedAssets(now)
+				cleanupCompletedAssets(now)
 			case <-stop:
 				return
 			}
