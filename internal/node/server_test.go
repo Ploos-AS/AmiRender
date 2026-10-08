@@ -663,3 +663,38 @@ func TestUploadEndAndCleanupAreSerialized(t *testing.T) {
 		}
 	}
 }
+
+func TestValidStagedAssetRejectsSymlinksAndOutsideTemp(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "amirender-asset-test")
+	if err := os.Mkdir(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(dir, "scene.pov")
+	if err := os.WriteFile(file, []byte("scene"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := validStagedAsset(file); ok {
+		t.Fatal("asset outside os.TempDir accepted")
+	}
+
+	tempDir, err := os.MkdirTemp("", "amirender-asset-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+	target := filepath.Join(tempDir, "real.pov")
+	if err := os.WriteFile(target, []byte("scene"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(tempDir, "link.pov")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if _, ok := validStagedAsset(link); ok {
+		t.Fatal("symlink asset accepted")
+	}
+	if _, ok := validStagedAsset(target); !ok {
+		t.Fatal("valid staging asset rejected")
+	}
+}
