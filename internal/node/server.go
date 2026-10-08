@@ -21,6 +21,7 @@ import (
 type uploadSession struct {
 	size    int64
 	created time.Time
+	dir     string
 }
 
 const uploadSessionTTL = 30 * time.Minute
@@ -132,12 +133,15 @@ func cleanupExpiredUploads(now time.Time) {
 	for path, session := range uploadSessions.expected {
 		if now.Sub(session.created) >= uploadSessionTTL {
 			delete(uploadSessions.expected, path)
-			expired = append(expired, path)
+			expired = append(expired, session.dir)
 		}
 	}
 	uploadSessions.Unlock()
-	for _, path := range expired {
-		_ = os.RemoveAll(filepath.Dir(path))
+	for _, dir := range expired {
+		if dir == "" || !strings.HasPrefix(filepath.Base(dir), "amirender-asset-") {
+			continue
+		}
+		_ = os.RemoveAll(dir)
 	}
 }
 
@@ -161,7 +165,7 @@ func handleUploadBegin(c net.Conn, m message) {
 	}
 	_ = file.Close()
 	uploadSessions.Lock()
-	uploadSessions.expected[path] = uploadSession{size: m.Size, created: time.Now()}
+	uploadSessions.expected[path] = uploadSession{size: m.Size, created: time.Now(), dir: dir}
 	uploadSessions.Unlock()
 	_ = json.NewEncoder(c).Encode(stagedResult{Type: "STAGING", Asset: path, Size: m.Size})
 }
