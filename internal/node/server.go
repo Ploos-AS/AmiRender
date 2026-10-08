@@ -181,6 +181,17 @@ func handleUploadChunk(c net.Conn, m message) {
 		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "invalid chunk"})
 		return
 	}
+	uploadSessions.Lock()
+	defer uploadSessions.Unlock()
+	session, exists := uploadSessions.expected[clean]
+	if !exists {
+		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "upload session unavailable"})
+		return
+	}
+	if m.Offset+int64(len(data)) > session.size {
+		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "chunk exceeds declared upload size"})
+		return
+	}
 	file, err := os.OpenFile(clean, os.O_WRONLY, 0600)
 	if err != nil {
 		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "asset unavailable"})
