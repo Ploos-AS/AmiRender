@@ -611,3 +611,55 @@ func TestUploadChunkEnforcesDeclaredSizeAndFinalization(t *testing.T) {
 		t.Fatalf("chunk after completion accepted: %#v", result)
 	}
 }
+
+func TestUploadEndAndCleanupAreSerialized(t *testing.T) {
+	now := time.Now()
+	dir, err := os.MkdirTemp("", "amirender-asset-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	path := filepath.Join(dir, "race.pov")
+	if err := os.WriteFile(path, []byte("abc"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	uploadSessions.Lock()
+	uploadSessions.expected[path] = uploadSession{
+		size: 3, created: now.Add(-uploadSessionTTL - time.Second), dir: dir,
+	}
+	uploadSessions.Unlock()
+	defer func() {
+		uploadSessions.Lock()
+		delete(uploadSessions.expected, path)
+		uploadSessions.Unlock()
+	}()
+	server, client := net.Pipe()
+	defer client.Close()
+	go Handle(server)
+	enc := json.NewEncoder(client)
+	dec := json.NewDecoder(bufio.NewReader(client))
+	uploadSessions.Lock()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		cleanupExpiredUploads(now)
+	}()
+	if err := enc.Encode(map[string]any{"type": "UPLOAD_END", "asset": path, "size": 3}); err != nil {
+		uploadSessions.Unlock()
+		t.Fatal(err)
+	}
+	uploadSessions.Unlock()
+	var result stagedResult
+	if err := dec.Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	<-done
+	if result.Type != "STAGED" && result.Type != "FAILED" {
+		t.Fatalf("unexpected concurrent completion: %#v", result)
+	}
+	if result.Type == "STAGED" {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("completed upload deleted by cleanup: %v", err)
+		}
+	}
+}
