@@ -27,6 +27,7 @@ type uploadSession struct {
 }
 
 const uploadSessionTTL = 30 * time.Minute
+const completedAssetTTL = 24 * time.Hour
 
 var uploadSessions = struct {
 	sync.Mutex
@@ -38,7 +39,8 @@ var uploadSessions = struct {
 var assetIDs = struct {
 	sync.Mutex
 	paths map[string]string
-}{paths: make(map[string]string)}
+	completed map[string]time.Time
+}{paths: make(map[string]string), completed: make(map[string]time.Time)}
 
 func newAssetID(path string) (string, error) {
 	var random [16]byte
@@ -53,6 +55,16 @@ func newAssetID(path string) (string, error) {
 }
 
 // resolveUploadAsset accepts opaque IDs and legacy paths during migration.
+func markAssetCompleted(path string, now time.Time) {
+	assetIDs.Lock()
+	for id, registeredPath := range assetIDs.paths {
+		if registeredPath == path {
+			assetIDs.completed[id] = now
+		}
+	}
+	assetIDs.Unlock()
+}
+
 func resolveUploadAsset(asset string) string {
 	if !strings.HasPrefix(asset, "asset-") {
 		return asset
@@ -172,6 +184,25 @@ func validStagedAsset(asset string) (string, bool) {
 		return "", false
 	}
 	return clean, true
+}
+
+// cleanupCompletedAssets revokes finished assets after their retention window.
+func cleanupCompletedAssets(now time.Time) {
+	var expired []string
+	assetIDs.Lock()
+	for id, completedAt := range assetIDs.completed {
+		if now.Sub(completedAt) >= completedAssetTTL {
+			expired = append(expired, assetIDs.paths[id])
+			delete(assetIDs.paths, id)
+			delete(assetIDs.completed, id)
+		}
+	}
+	assetIDs.Unlock()
+	for _, path := range expired {
+		if _, ok := validStagedAsset(path); ok {
+			_ = os.RemoveAll(filepath.Dir(path))
+		}
+	}
 }
 
 func cleanupExpiredUploads(now time.Time) {
@@ -298,6 +329,7 @@ func handleUploadEnd(c net.Conn, m message) {
 		return
 	}
 	delete(uploadSessions.expected, clean)
+	markAssetCompleted(clean, time.Now())
 	_ = json.NewEncoder(c).Encode(stagedResult{Type: "STAGED", Asset: clean, Size: info.Size()})
 }
 
@@ -410,6 +442,7 @@ func Serve(ln net.Listener) error {
 			select {
 			case now := <-ticker.C:
 				cleanupExpiredUploads(now)
+			cleanupCompletedAssets(now)
 			case <-stop:
 				return
 			}
