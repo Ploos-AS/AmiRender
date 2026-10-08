@@ -122,9 +122,23 @@ func Handle(c net.Conn) {
 }
 
 func validStagedAsset(asset string) (string, bool) {
+	if asset == "" || !filepath.IsAbs(asset) {
+		return "", false
+	}
 	clean := filepath.Clean(asset)
 	dir := filepath.Dir(clean)
-	return clean, asset != "" && strings.HasPrefix(filepath.Base(dir), "amirender-asset-")
+	if filepath.Dir(dir) != filepath.Clean(os.TempDir()) || !strings.HasPrefix(filepath.Base(dir), "amirender-asset-") {
+		return "", false
+	}
+	dirInfo, err := os.Lstat(dir)
+	if err != nil || !dirInfo.IsDir() || dirInfo.Mode()&os.ModeSymlink != 0 {
+		return "", false
+	}
+	fileInfo, err := os.Lstat(clean)
+	if err != nil || !fileInfo.Mode().IsRegular() {
+		return "", false
+	}
+	return clean, true
 }
 
 func cleanupExpiredUploads(now time.Time) {
