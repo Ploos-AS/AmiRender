@@ -330,6 +330,20 @@ func writeResult(c net.Conn, result farm.WorkerResult) {
 }
 
 func Serve(ln net.Listener) error {
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case now := <-ticker.C:
+				cleanupExpiredUploads(now)
+			case <-stop:
+				return
+			}
+		}
+	}()
 	for {
 		c, err := ln.Accept()
 		if err != nil {
