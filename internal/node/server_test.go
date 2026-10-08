@@ -820,3 +820,30 @@ func TestOpaqueAssetIDDownload(t *testing.T) {
 		t.Fatalf("unknown asset ID accepted: %#v", rejected)
 	}
 }
+
+func TestCleanupExpiredUploadsRevokesAssetIDs(t *testing.T) {
+	dir, err := os.MkdirTemp("", "amirender-asset-expired-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	path := filepath.Join(dir, "expired.pov")
+	if err := os.WriteFile(path, []byte("scene"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	id, err := newAssetID(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	uploadSessions.Lock()
+	uploadSessions.expected[path] = uploadSession{size: 5, created: now.Add(-uploadSessionTTL - time.Minute), dir: dir}
+	uploadSessions.Unlock()
+	cleanupExpiredUploads(now)
+	if resolved := resolveUploadAsset(id); resolved != "" {
+		t.Fatalf("expired ID still resolves: %q", resolved)
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatalf("expired staging directory still exists: %v", err)
+	}
+}
