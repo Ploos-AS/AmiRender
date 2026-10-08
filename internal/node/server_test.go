@@ -565,3 +565,49 @@ func TestCleanupExpiredUploadsDoesNotDeleteUnregisteredDirectory(t *testing.T) {
 		t.Fatalf("unregistered directory was removed: %v", err)
 	}
 }
+
+func TestUploadChunkEnforcesDeclaredSizeAndFinalization(t *testing.T) {
+	server, client := net.Pipe()
+	defer client.Close()
+	go Handle(server)
+	enc := json.NewEncoder(client)
+	dec := json.NewDecoder(bufio.NewReader(client))
+	send := func(m map[string]any) stagedResult {
+		t.Helper()
+		if err := enc.Encode(m); err != nil {
+			t.Fatal(err)
+		}
+		var result stagedResult
+		if err := dec.Decode(&result); err != nil {
+			t.Fatal(err)
+		}
+		return result
+	}
+	begun := send(map[string]any{"type": "UPLOAD_BEGIN", "name": "size.bin", "size": 3})
+	if begun.Type != "STAGING" {
+		t.Fatalf("begin: %#v", begun)
+	}
+	defer os.RemoveAll(filepath.Dir(begun.Asset))
+	oversized := send(map[string]any{
+		"type": "UPLOAD_CHUNK", "asset": begun.Asset, "offset": 0,
+		"data": base64.StdEncoding.EncodeToString([]byte("four")),
+	})
+	if oversized.Type != "FAILED" || oversized.Error != "chunk exceeds declared upload size" {
+		t.Fatalf("oversized chunk accepted: %#v", oversized)
+	}
+	if result := send(map[string]any{
+		"type": "UPLOAD_CHUNK", "asset": begun.Asset, "offset": 0,
+		"data": base64.StdEncoding.EncodeToString([]byte("abc")),
+	}); result.Type != "CHUNKED" || result.Offset != 3 {
+		t.Fatalf("valid chunk rejected: %#v", result)
+	}
+	if result := send(map[string]any{"type": "UPLOAD_END", "asset": begun.Asset, "size": 3}); result.Type != "STAGED" {
+		t.Fatalf("completion rejected: %#v", result)
+	}
+	if result := send(map[string]any{
+		"type": "UPLOAD_CHUNK", "asset": begun.Asset, "offset": 3,
+		"data": base64.StdEncoding.EncodeToString([]byte("x")),
+	}); result.Type != "FAILED" || result.Error != "upload session unavailable" {
+		t.Fatalf("chunk after completion accepted: %#v", result)
+	}
+}
