@@ -3,6 +3,8 @@ package node
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -30,6 +32,25 @@ var uploadSessions = struct {
 	sync.Mutex
 	expected map[string]uploadSession
 }{expected: make(map[string]uploadSession)}
+
+// assetIDs is a transitional registry. Existing clients continue to use paths
+// until the protocol and Amiga client can switch to opaque identifiers.
+var assetIDs = struct {
+	sync.Mutex
+	paths map[string]string
+}{paths: make(map[string]string)}
+
+func newAssetID(path string) (string, error) {
+	var random [16]byte
+	if _, err := rand.Read(random[:]); err != nil {
+		return "", err
+	}
+	id := "asset-" + hex.EncodeToString(random[:])
+	assetIDs.Lock()
+	assetIDs.paths[id] = path
+	assetIDs.Unlock()
+	return id, nil
+}
 
 const maxUploadBytes = 1024 * 1024
 const maxMessageBytes = 2 * 1024 * 1024
@@ -178,6 +199,11 @@ func handleUploadBegin(c net.Conn, m message) {
 		return
 	}
 	_ = file.Close()
+	if _, err := newAssetID(path); err != nil {
+		_ = os.RemoveAll(dir)
+		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "asset registration failed"})
+		return
+	}
 	uploadSessions.Lock()
 	uploadSessions.expected[path] = uploadSession{size: m.Size, created: time.Now(), dir: dir}
 	uploadSessions.Unlock()
