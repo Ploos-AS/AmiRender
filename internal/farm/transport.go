@@ -23,6 +23,7 @@ type WorkerResult struct {
 	JobID  string `json:"job_id"`
 	Engine string `json:"engine,omitempty"`
 	Output string `json:"output,omitempty"`
+	AssetID string `json:"asset_id,omitempty"`
 	Error  string `json:"error,omitempty"`
 }
 
