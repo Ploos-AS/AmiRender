@@ -108,5 +108,23 @@ int main(void)
             downloaded, sizeof(downloaded), &downloaded_size) == 0) {
         return 11;
     }
+    fake.reply = "{\"type\":\"COMPLETE\",\"output\":\"/tmp/old.png\",\"asset_id\":\"asset-new\"}";
+    if (amirender_extract_output_asset(fake.reply, asset, sizeof(asset)) != 0 ||
+        strcmp(asset, "asset-new") != 0) {
+        fprintf(stderr, "opaque asset ID not preferred\n");
+        return 12;
+    }
+    fake.reply = "{\"type\":\"COMPLETE\",\"output\":\"/tmp/old.png\"}";
+    if (amirender_extract_output_asset(fake.reply, asset, sizeof(asset)) != 0 ||
+        strcmp(asset, "/tmp/old.png") != 0) {
+        fprintf(stderr, "legacy output fallback failed\n");
+        return 13;
+    }
+    fake.reply = "{\"type\":\"COMPLETE\",\"output\":\"/tmp/old.png\",\"asset_id\":\"\"}";
+    if (amirender_extract_output_asset(fake.reply, asset, sizeof(asset)) != 0 ||
+        strcmp(asset, "/tmp/old.png") != 0) {
+        fprintf(stderr, "empty asset ID fallback failed\n");
+        return 14;
+    }
     return 0;
 }
