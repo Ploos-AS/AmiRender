@@ -138,5 +138,20 @@ int main(void)
         fprintf(stderr, "legacy upload asset fallback failed\n");
         return 16;
     }
+    fake.reply = "{\"type\":\"STAGING\",\"id\":\"asset-roundtrip\",\"asset\":\"/tmp/scene.pov\"}";
+    if (amirender_upload_begin(&transport, "scene.pov", 10, asset, sizeof(asset)) != 0 ||
+        strcmp(asset, "asset-roundtrip") != 0) return 17;
+    fake.reply = "{\"type\":\"CHUNKED\",\"offset\":10}";
+    if (amirender_upload_chunk(&transport, asset, 0, scene, sizeof(scene) - 1) != 0 ||
+        strstr(fake.sent, "\"asset\":\"asset-roundtrip\"") == NULL) {
+        fprintf(stderr, "upload chunk did not use opaque ID\n");
+        return 18;
+    }
+    fake.reply = "{\"type\":\"STAGED\"}";
+    if (amirender_upload_end(&transport, asset, 10) != 0 ||
+        strstr(fake.sent, "\"asset\":\"asset-roundtrip\"") == NULL) {
+        fprintf(stderr, "upload end did not use opaque ID\n");
+        return 19;
+    }
     return 0;
 }
