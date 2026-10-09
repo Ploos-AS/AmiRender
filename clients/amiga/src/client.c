@@ -307,3 +307,28 @@ int amirender_submit_job(
     }
     return 0;
 }
+
+int amirender_extract_output_asset(
+    const char *reply, char *asset, size_t asset_size)
+{
+    const char *key = "\"asset_id\":\"";
+    const char *start;
+    const char *end;
+    size_t length;
+
+    if (reply == NULL || asset == NULL || asset_size < 2) return -1;
+    start = strstr(reply, key);
+    if (start == NULL || start[strlen(key)] == '"') {
+        key = "\"output\":\"";
+        start = strstr(reply, key);
+    }
+    if (start == NULL) return -1;
+    start += strlen(key);
+    end = strchr(start, '"');
+    if (end == NULL) return -1;
+    length = (size_t)(end - start);
+    if (length == 0 || length >= asset_size) return -1;
+    memcpy(asset, start, length);
+    asset[length] = '\0';
+    return 0;
+}
