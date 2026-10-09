@@ -70,28 +70,6 @@ static int upload_file(
     return amirender_upload_end(transport, asset, total);
 }
 
-static int extract_output(const char *reply, char *output, size_t output_size)
-{
-    const char *key = "\"asset_id\":\"";
-    const char *start = strstr(reply, key);
-    if (start == NULL || start[strlen(key)] == '"') {
-        key = "\"output\":\"";
-        start = strstr(reply, key);
-    }
-    const char *end;
-    size_t length;
-
-    if (start == NULL) return -1;
-    start += strlen(key);
-    end = strchr(start, '\"');
-    if (end == NULL) return -1;
-    length = (size_t)(end - start);
-    if (length == 0 || length >= output_size) return -1;
-    memcpy(output, start, length);
-    output[length] = '\0';
-    return 0;
-}
-
 static int download_file(
     struct amirender_transport *transport, const char *asset, const char *path,
     size_t *total_size)
@@ -189,7 +167,7 @@ int main(int argc, char **argv)
 
     job.scene = asset;
     rc = amirender_submit_job(&transport, &job, reply, sizeof(reply));
-    if (rc != 0 || extract_output(reply, output_asset, sizeof(output_asset)) != 0) {
+    if (rc != 0 || amirender_extract_output_asset(reply, output_asset, sizeof(output_asset)) != 0) {
         amirender_bsdsocket_close(&socket_state);
         fprintf(stderr, "AmiRender: render failed\n");
         return 10;
