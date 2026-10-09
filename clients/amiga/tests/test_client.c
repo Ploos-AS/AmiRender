@@ -153,5 +153,36 @@ int main(void)
         fprintf(stderr, "upload end did not use opaque ID\n");
         return 19;
     }
+    {
+        int eof = 0;
+        size_t count = 0;
+        fake.reply = "{\"type\":\"DATA\",\"data\":\"iVBORw0K\",\"eof\":false}";
+        if (amirender_download_chunk(&transport, "asset-rendered", 0,
+                downloaded, sizeof(downloaded), &count, &eof) != 0 ||
+            count != 6 || eof != 0 ||
+            strstr(fake.sent, "\"asset\":\"asset-rendered\"") == NULL ||
+            strstr(fake.sent, "\"offset\":0") == NULL ||
+            downloaded[0] != 0x89 || downloaded[1] != 'P') {
+            fprintf(stderr, "first opaque download chunk failed\n");
+            return 20;
+        }
+        fake.reply = "{\"type\":\"DATA\",\"data\":\"Tkc=\",\"eof\":true}";
+        if (amirender_download_chunk(&transport, "asset-rendered", 6,
+                downloaded, sizeof(downloaded), &count, &eof) != 0 ||
+            count != 2 || eof != 1 ||
+            strstr(fake.sent, "\"asset\":\"asset-rendered\"") == NULL ||
+            strstr(fake.sent, "\"offset\":6") == NULL ||
+            downloaded[0] != 'N' || downloaded[1] != 'G') {
+            fprintf(stderr, "final opaque download chunk failed\n");
+            return 21;
+        }
+        fake.reply = "{\"type\":\"DATA\",\"eof\":true}";
+        if (amirender_download_chunk(&transport, "asset-rendered", 8,
+                downloaded, sizeof(downloaded), &count, &eof) != 0 ||
+            count != 0 || eof != 1) {
+            fprintf(stderr, "empty EOF response failed\n");
+            return 22;
+        }
+    }
     return 0;
 }
