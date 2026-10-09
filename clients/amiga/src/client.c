@@ -161,6 +161,10 @@ int amirender_upload_begin(
     if (received <= 0 || (size_t)received >= sizeof(reply)) return -1;
     reply[received] = '\0';
     if (strstr(reply, "\"type\":\"STAGING\"") == NULL) return -1;
+    if (strstr(reply, "\"id\":\"") != NULL &&
+        extract_string_field(reply, "\"id\":\"", asset, asset_size) == 0) {
+        return 0;
+    }
     return extract_string_field(reply, "\"asset\":\"", asset, asset_size);
 }
 
