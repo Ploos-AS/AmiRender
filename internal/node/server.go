@@ -167,8 +167,10 @@ func Handle(c net.Conn) {
 				continue
 			}
 			j.Scene = scene
-			renderPOVRay(c, j)
-			release()
+			func() {
+				defer release()
+				renderPOVRay(c, j)
+			}()
 		default:
 			writeResult(c, farm.WorkerResult{
 				Type: "FAILED", JobID: j.ID, Engine: j.Engine, Error: "unsupported engine",
