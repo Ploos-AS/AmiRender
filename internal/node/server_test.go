@@ -980,7 +980,6 @@ sphere { <0, 0, 0>, 1 pigment { color rgb <0.7, 0.7, 0.7> } }
 		t.Fatalf("unexpected completion result: %#v", completed)
 	}
 
-
 	if err := enc.Encode(map[string]any{
 		"type": "SUBMIT",
 		"job": map[string]any{
@@ -1018,4 +1017,3 @@ sphere { <0, 0, 0>, 1 pigment { color rgb <0.7, 0.7, 0.7> } }
 		t.Fatalf("download is not a PNG: %x", png[:min(len(png), len(signature))])
 	}
 }
-
