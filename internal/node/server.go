@@ -149,16 +149,26 @@ func Handle(c net.Conn) {
 				Type: "COMPLETE", JobID: j.ID, Engine: "null", Output: j.Output,
 			})
 		case "povray":
+			scene, release := leaseDownloadAsset(j.Scene)
+			if strings.HasPrefix(j.Scene, "asset-") && scene == "" {
+				writeResult(c, farm.WorkerResult{
+					Type: "FAILED", JobID: j.ID, Engine: "povray", Error: "scene asset unavailable",
+				})
+				continue
+			}
 			uploadSessions.Lock()
-			_, incomplete := uploadSessions.expected[filepath.Clean(j.Scene)]
+			_, incomplete := uploadSessions.expected[filepath.Clean(scene)]
 			uploadSessions.Unlock()
 			if incomplete {
+				release()
 				writeResult(c, farm.WorkerResult{
 					Type: "FAILED", JobID: j.ID, Engine: "povray", Error: "scene upload incomplete",
 				})
 				continue
 			}
+			j.Scene = scene
 			renderPOVRay(c, j)
+			release()
 		default:
 			writeResult(c, farm.WorkerResult{
 				Type: "FAILED", JobID: j.ID, Engine: j.Engine, Error: "unsupported engine",
