@@ -354,8 +354,23 @@ func handleUploadEnd(c net.Conn, m message) {
 	_ = json.NewEncoder(c).Encode(stagedResult{Type: "STAGED", Asset: clean, Size: info.Size()})
 }
 
+// leaseDownloadAsset protects ID-based downloads while they access the file.
+// Legacy paths remain supported during the protocol migration.
+func leaseDownloadAsset(asset string) (string, func()) {
+	if !strings.HasPrefix(asset, "asset-") {
+		return asset, func() {}
+	}
+	path, release, ok := acquireAsset(asset)
+	if !ok {
+		return "", func() {}
+	}
+	return path, release
+}
+
 func handleDownloadChunk(c net.Conn, m message) {
-	clean, ok := validStagedAsset(resolveUploadAsset(m.Asset))
+	path, release := leaseDownloadAsset(m.Asset)
+	defer release()
+	clean, ok := validStagedAsset(path)
 	if !ok || m.Offset < 0 || m.Size <= 0 || m.Size > 4096 {
 		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "invalid chunk request"})
 		return
@@ -409,7 +424,9 @@ func handleUpload(c net.Conn, m message) {
 }
 
 func handleDownload(c net.Conn, m message) {
-	clean, ok := validStagedAsset(resolveUploadAsset(m.Asset))
+	path, release := leaseDownloadAsset(m.Asset)
+	defer release()
+	clean, ok := validStagedAsset(path)
 	if !ok {
 		_ = json.NewEncoder(c).Encode(stagedResult{Type: "FAILED", Error: "unsafe asset reference"})
 		return
