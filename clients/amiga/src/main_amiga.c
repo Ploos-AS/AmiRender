@@ -72,8 +72,12 @@ static int upload_file(
 
 static int extract_output(const char *reply, char *output, size_t output_size)
 {
-    const char *key = "\"output\":\"";
+    const char *key = "\"asset_id\":\"";
     const char *start = strstr(reply, key);
+    if (start == NULL || start[strlen(key)] == '"') {
+        key = "\"output\":\"";
+        start = strstr(reply, key);
+    }
     const char *end;
     size_t length;
 
