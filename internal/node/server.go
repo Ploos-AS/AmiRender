@@ -473,7 +473,8 @@ func renderPOVRay(c net.Conn, j farm.RenderJob) {
 		})
 		return
 	}
-	if _, err := newAssetID(result.Output); err != nil {
+	id, err := newAssetID(result.Output)
+	if err != nil {
 		_ = os.RemoveAll(dir)
 		writeResult(c, farm.WorkerResult{
 			Type: "FAILED", JobID: j.ID, Engine: "povray", Error: "output registration failed",
@@ -482,7 +483,7 @@ func renderPOVRay(c net.Conn, j farm.RenderJob) {
 	}
 	markAssetCompleted(result.Output, time.Now())
 	writeResult(c, farm.WorkerResult{
-		Type: "COMPLETE", JobID: j.ID, Engine: "povray", Output: result.Output,
+		Type: "COMPLETE", JobID: j.ID, Engine: "povray", Output: result.Output, AssetID: id,
 	})
 }
 
