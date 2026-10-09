@@ -879,3 +879,40 @@ func TestCompletedAssetRetentionTTL(t *testing.T) {
 		t.Fatalf("expired completed asset directory still exists: %v", err)
 	}
 }
+
+func TestCompletedAssetLeaseDefersCleanup(t *testing.T) {
+	dir, err := os.MkdirTemp("", "amirender-asset-leased-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	path := filepath.Join(dir, "scene.pov")
+	if err := os.WriteFile(path, []byte("scene"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	id, err := newAssetID(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	markAssetCompleted(path, now)
+	leasedPath, release, ok := acquireAsset(id)
+	if !ok || leasedPath != path {
+		t.Fatalf("failed to acquire asset lease: %q", leasedPath)
+	}
+	cleanupCompletedAssets(now.Add(completedAssetTTL + time.Second))
+	if got := resolveUploadAsset(id); got != path {
+		t.Fatalf("active asset revoked: %q", got)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("leased asset deleted: %v", err)
+	}
+	release()
+	cleanupCompletedAssets(now.Add(completedAssetTTL + time.Second))
+	if got := resolveUploadAsset(id); got != "" {
+		t.Fatalf("released expired asset still resolves: %q", got)
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatalf("released expired asset directory still exists: %v", err)
+	}
+}
