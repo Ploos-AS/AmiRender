@@ -60,4 +60,7 @@ int amirender_submit_job(
     char *reply,
     size_t reply_size);
 
+int amirender_extract_output_asset(
+    const char *reply, char *asset, size_t asset_size);
+
 #endif
