@@ -126,5 +126,17 @@ int main(void)
         fprintf(stderr, "empty asset ID fallback failed\n");
         return 14;
     }
+    fake.reply = "{\"type\":\"STAGING\",\"id\":\"asset-opaque\",\"asset\":\"/tmp/scene.pov\"}";
+    if (amirender_upload_begin(&transport, "scene.pov", 10, asset, sizeof(asset)) != 0 ||
+        strcmp(asset, "asset-opaque") != 0) {
+        fprintf(stderr, "opaque upload ID not preferred\n");
+        return 15;
+    }
+    fake.reply = "{\"type\":\"STAGING\",\"asset\":\"/tmp/scene.pov\"}";
+    if (amirender_upload_begin(&transport, "scene.pov", 10, asset, sizeof(asset)) != 0 ||
+        strcmp(asset, "/tmp/scene.pov") != 0) {
+        fprintf(stderr, "legacy upload asset fallback failed\n");
+        return 16;
+    }
     return 0;
 }
