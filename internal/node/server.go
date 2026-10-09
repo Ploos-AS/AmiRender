@@ -40,7 +40,8 @@ var assetIDs = struct {
 	sync.Mutex
 	paths     map[string]string
 	completed map[string]time.Time
-}{paths: make(map[string]string), completed: make(map[string]time.Time)}
+	active    map[string]int
+}{paths: make(map[string]string), completed: make(map[string]time.Time), active: make(map[string]int)}
 
 func newAssetID(path string) (string, error) {
 	var random [16]byte
@@ -186,12 +187,32 @@ func validStagedAsset(asset string) (string, bool) {
 	return clean, true
 }
 
+// acquireAsset prevents TTL cleanup while a registered asset is in use.
+func acquireAsset(id string) (string, func(), bool) {
+	assetIDs.Lock()
+	path, ok := assetIDs.paths[id]
+	if !ok {
+		assetIDs.Unlock()
+		return "", nil, false
+	}
+	assetIDs.active[id]++
+	assetIDs.Unlock()
+	return path, func() {
+		assetIDs.Lock()
+		assetIDs.active[id]--
+		if assetIDs.active[id] == 0 {
+			delete(assetIDs.active, id)
+		}
+		assetIDs.Unlock()
+	}, true
+}
+
 // cleanupCompletedAssets revokes finished assets after their retention window.
 func cleanupCompletedAssets(now time.Time) {
 	var expired []string
 	assetIDs.Lock()
 	for id, completedAt := range assetIDs.completed {
-		if now.Sub(completedAt) >= completedAssetTTL {
+		if now.Sub(completedAt) >= completedAssetTTL && assetIDs.active[id] == 0 {
 			expired = append(expired, assetIDs.paths[id])
 			delete(assetIDs.paths, id)
 			delete(assetIDs.completed, id)
