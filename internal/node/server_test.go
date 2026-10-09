@@ -993,12 +993,12 @@ sphere { <0, 0, 0>, 1 pigment { color rgb <0.7, 0.7, 0.7> } }
 	if err := dec.Decode(&rendered); err != nil {
 		t.Fatal(err)
 	}
-	if rendered.Type != "COMPLETE" || rendered.Output == "" || rendered.Output == "RAM:frame.png" {
+	if rendered.Type != "COMPLETE" || rendered.Output == "" || rendered.Output == "RAM:frame.png" || !strings.HasPrefix(rendered.AssetID, "asset-") {
 		t.Fatalf("unexpected render result: %#v", rendered)
 	}
 	defer os.RemoveAll(filepath.Dir(rendered.Output))
 
-	if err := enc.Encode(map[string]string{"type": "DOWNLOAD", "asset": rendered.Output}); err != nil {
+	if err := enc.Encode(map[string]string{"type": "DOWNLOAD", "asset": rendered.AssetID}); err != nil {
 		t.Fatal(err)
 	}
 	var downloaded stagedResult
