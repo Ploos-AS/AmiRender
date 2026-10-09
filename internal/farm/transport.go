@@ -19,12 +19,12 @@ type RenderJob struct {
 }
 
 type WorkerResult struct {
-	Type   string `json:"type"`
-	JobID  string `json:"job_id"`
-	Engine string `json:"engine,omitempty"`
-	Output string `json:"output,omitempty"`
+	Type    string `json:"type"`
+	JobID   string `json:"job_id"`
+	Engine  string `json:"engine,omitempty"`
+	Output  string `json:"output,omitempty"`
 	AssetID string `json:"asset_id,omitempty"`
-	Error  string `json:"error,omitempty"`
+	Error   string `json:"error,omitempty"`
 }
 
 type WorkerClient interface {
