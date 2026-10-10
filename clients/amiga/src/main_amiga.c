@@ -6,9 +6,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef __m68k__
-#include <proto/dos.h>
-#endif
 
 #define AMIRENDER_PORT 6800
 #define REPLY_SIZE 1024
@@ -72,56 +69,6 @@ static int upload_file(
     }
     if (fclose(file) != 0) return -1;
     return amirender_upload_end(transport, asset, total);
-}
-
-static int download_file(
-    struct amirender_transport *transport, const char *asset, const char *path,
-    size_t *total_size)
-{
-    FILE *file;
-    char temporary[ASSET_SIZE];
-    int name_length;
-    unsigned char buffer[CHUNK_SIZE];
-    size_t offset = 0, count;
-    int eof = 0;
-
-    name_length = snprintf(temporary, sizeof(temporary), "%s.part", path);
-    if (name_length < 0 || (size_t)name_length >= sizeof(temporary)) return -1;
-    file = fopen(temporary, "wb");
-    if (file == NULL) return -1;
-    while (!eof) {
-        if (amirender_download_chunk(
-                transport, asset, offset, buffer, sizeof(buffer), &count, &eof) != 0) {
-            fclose(file);
-            remove(temporary);
-            return -1;
-        }
-        if (count > 0 && fwrite(buffer, 1, count, file) != count) {
-            fclose(file);
-            remove(temporary);
-            return -1;
-        }
-        offset += count;
-        if (count == 0 && !eof) {
-            fclose(file);
-            remove(temporary);
-            return -1;
-        }
-    }
-    if (fclose(file) != 0) {
-        remove(temporary);
-        return -1;
-    }
-#ifdef __m68k__
-    if (!Rename((STRPTR)temporary, (STRPTR)path)) {
-#else
-    if (rename(temporary, path) != 0) {
-#endif
-        remove(temporary);
-        return -1;
-    }
-    *total_size = offset;
-    return 0;
 }
 
 static void usage(const char *program)
@@ -189,7 +136,7 @@ int main(int argc, char **argv)
         return 10;
     }
 
-    rc = download_file(&transport, output_asset, argv[3], &output_size);
+    rc = amirender_download_file(&transport, output_asset, argv[3], &output_size);
     amirender_bsdsocket_close(&socket_state);
     if (rc != 0) {
         fprintf(stderr, "AmiRender: output download failed\n");
