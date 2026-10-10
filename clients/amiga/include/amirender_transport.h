@@ -63,4 +63,8 @@ int amirender_submit_job(
 int amirender_extract_output_asset(
     const char *reply, char *asset, size_t asset_size);
 
+int amirender_download_file(
+    struct amirender_transport *transport, const char *asset,
+    const char *path, size_t *total_size);
+
 #endif
