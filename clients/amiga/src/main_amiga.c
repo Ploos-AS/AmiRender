@@ -6,6 +6,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef __m68k__
+#include <proto/dos.h>
+#endif
+
 #define AMIRENDER_PORT 6800
 #define REPLY_SIZE 1024
 #define ASSET_SIZE 1024
@@ -108,7 +112,11 @@ static int download_file(
         remove(temporary);
         return -1;
     }
+#ifdef __m68k__
+    if (!Rename((STRPTR)temporary, (STRPTR)path)) {
+#else
     if (rename(temporary, path) != 0) {
+#endif
         remove(temporary);
         return -1;
     }
