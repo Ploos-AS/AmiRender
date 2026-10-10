@@ -1,0 +1,17 @@
+{
+  "enabled": false,
+  "workload": "none",
+  "idle_delay_seconds": 300,
+  "cpu_percent": 50,
+  "temperature_limit_c": 75,
+  "monero": {
+    "executable": "",
+    "pool": "",
+    "wallet": ""
+  },
+  "verus": {
+    "executable": "",
+    "pool": "",
+    "wallet": ""
+  }
+}

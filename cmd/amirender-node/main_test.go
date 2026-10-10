@@ -6,6 +6,8 @@ import (
 	"net"
 	"testing"
 	"time"
+
+	"github.com/Ploos-AS/AmiRender/internal/node"
 )
 
 func TestNullEngineEndToEnd(t *testing.T) {
@@ -18,7 +20,7 @@ func TestNullEngineEndToEnd(t *testing.T) {
 	go func() {
 		c, err := ln.Accept()
 		if err == nil {
-			handle(c)
+			node.Handle(c)
 		}
 	}()
 
