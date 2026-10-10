@@ -3,6 +3,13 @@
 #include "amirender_upload.h"
 
 #include <stdio.h>
+
+#ifdef __m68k__
+#include <proto/dos.h>
+#endif
+
+#define AMIRENDER_FILE_CHUNK_SIZE 2048
+#define AMIRENDER_FILE_PATH_SIZE 1024
 #include <string.h>
 
 int amirender_upload_asset(
@@ -334,5 +341,56 @@ int amirender_extract_output_asset(
     if (length == 0 || length >= asset_size) return -1;
     memcpy(asset, start, length);
     asset[length] = '\0';
+    return 0;
+}
+
+int amirender_download_file(
+    struct amirender_transport *transport, const char *asset,
+    const char *path, size_t *total_size)
+{
+    FILE *file;
+    char temporary[AMIRENDER_FILE_PATH_SIZE];
+    unsigned char buffer[AMIRENDER_FILE_CHUNK_SIZE];
+    size_t offset = 0, count;
+    int eof = 0;
+    int name_length;
+
+    if (transport == NULL || asset == NULL || path == NULL || total_size == NULL) return -1;
+    name_length = snprintf(temporary, sizeof(temporary), "%s.part", path);
+    if (name_length < 0 || (size_t)name_length >= sizeof(temporary)) return -1;
+    file = fopen(temporary, "wb");
+    if (file == NULL) return -1;
+    while (!eof) {
+        if (amirender_download_chunk(
+                transport, asset, offset, buffer, sizeof(buffer), &count, &eof) != 0) {
+            fclose(file);
+            remove(temporary);
+            return -1;
+        }
+        if (count > 0 && fwrite(buffer, 1, count, file) != count) {
+            fclose(file);
+            remove(temporary);
+            return -1;
+        }
+        offset += count;
+        if (count == 0 && !eof) {
+            fclose(file);
+            remove(temporary);
+            return -1;
+        }
+    }
+    if (fclose(file) != 0) {
+        remove(temporary);
+        return -1;
+    }
+#ifdef __m68k__
+    if (!Rename((STRPTR)temporary, (STRPTR)path)) {
+#else
+    if (rename(temporary, path) != 0) {
+#endif
+        remove(temporary);
+        return -1;
+    }
+    *total_size = offset;
     return 0;
 }
