@@ -243,5 +243,40 @@ int main(void)
         }
         remove(path);
     }
+    {
+        const char *path = "amirender-complete-test.bin";
+        const char *partial = "amirender-complete-test.bin.part";
+        FILE *file = fopen(path, "wb");
+        size_t total = 0;
+        unsigned char result[8] = {0};
+        if (file == NULL) return 35;
+        if (fwrite("original", 1, 8, file) != 8 || fclose(file) != 0) return 36;
+        fake.reply = "{\"type\":\"DATA\",\"data\":\"iVBORw0K\",\"eof\":false}";
+        fake.next_reply = "{\"type\":\"DATA\",\"data\":\"Tkc=\",\"eof\":true}";
+        fake.receive_count = 0;
+        if (amirender_download_file(&transport, "asset-complete", path, &total) != 0 ||
+            total != 8 || fake.receive_count != 2 ||
+            strstr(fake.sent, "\"asset\":\"asset-complete\"") == NULL ||
+            strstr(fake.sent, "\"offset\":6") == NULL) {
+            fprintf(stderr, "multi-chunk download did not complete\n");
+            return 37;
+        }
+        fake.next_reply = NULL;
+        file = fopen(path, "rb");
+        if (file == NULL) return 38;
+        if (fread(result, 1, sizeof(result), file) != sizeof(result) ||
+            fclose(file) != 0 ||
+            result[0] != 0x89 || result[1] != 'P' || result[2] != 'N' || result[3] != 'G' ||\n            result[4] != 0x0d || result[5] != 0x0a || result[6] != 'N' || result[7] != 'G' != 0) {
+            fprintf(stderr, "published file content mismatch\n");
+            return 39;
+        }
+        file = fopen(partial, "rb");
+        if (file != NULL) {
+            fclose(file);
+            fprintf(stderr, "partial file remains after success\n");
+            return 40;
+        }
+        remove(path);
+    }
     return 0;
 }
