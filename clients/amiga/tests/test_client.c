@@ -184,5 +184,27 @@ int main(void)
             return 22;
         }
     }
+    {
+        const char *path = "amirender-download-test.bin";
+        const char *partial = "amirender-download-test.bin.part";
+        FILE *file = fopen(path, "wb");
+        size_t total = 999;
+        char existing[16] = {0};
+        if (file == NULL) return 23;
+        if (fwrite("original", 1, 8, file) != 8 || fclose(file) != 0) return 24;
+        fake.reply = "{\"type\":\"FAILED\",\"error\":\"interrupted\"}";
+        if (amirender_download_file(&transport, "asset-interrupted", path, &total) == 0) return 25;
+        file = fopen(path, "rb");
+        if (file == NULL) return 26;
+        if (fread(existing, 1, 8, file) != 8 || fclose(file) != 0 ||
+            memcmp(existing, "original", 8) != 0 || total != 999) return 27;
+        file = fopen(partial, "rb");
+        if (file != NULL) {
+            fclose(file);
+            fprintf(stderr, "partial download was not removed\n");
+            return 28;
+        }
+        remove(path);
+    }
     return 0;
 }
