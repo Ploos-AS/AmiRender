@@ -7,6 +7,8 @@
 struct fake_transport {
     char sent[1024];
     const char *reply;
+    const char *next_reply;
+    int receive_count;
 };
 
 static int fake_send(void *context, const char *data, size_t length)
@@ -25,7 +27,12 @@ static int fake_receive(void *context, char *buffer, size_t size)
 {
     struct fake_transport *fake = (struct fake_transport *)context;
     const char *reply = fake->reply;
-    size_t length = strlen(reply);
+    size_t length;
+
+    if (fake->next_reply != NULL && fake->receive_count++ > 0) {
+        reply = fake->next_reply;
+    }
+    length = strlen(reply);
 
     if (length > size) {
         return -1;
@@ -36,7 +43,7 @@ static int fake_receive(void *context, char *buffer, size_t size)
 
 int main(void)
 {
-    struct fake_transport fake = {{0}, NULL};
+    struct fake_transport fake = {{0}, NULL, NULL, 0};
     struct amirender_transport transport = {&fake, fake_send, fake_receive};
     struct amirender_job job = {
         "amiga-0002", "povray", "DH0:Scenes/demo.pov",
@@ -203,6 +210,36 @@ int main(void)
             fclose(file);
             fprintf(stderr, "partial download was not removed\n");
             return 28;
+        }
+        remove(path);
+    }
+    {
+        const char *path = "amirender-midstream-test.bin";
+        const char *partial = "amirender-midstream-test.bin.part";
+        FILE *file = fopen(path, "wb");
+        size_t total = 777;
+        char existing[16] = {0};
+        if (file == NULL) return 29;
+        if (fwrite("original", 1, 8, file) != 8 || fclose(file) != 0) return 30;
+        fake.reply = "{\"type\":\"DATA\",\"data\":\"iVBORw0K\",\"eof\":false}";
+        fake.next_reply = "{\"type\":\"FAILED\",\"error\":\"connection lost\"}";
+        fake.receive_count = 0;
+        if (amirender_download_file(&transport, "asset-midstream", path, &total) == 0 ||
+            fake.receive_count != 2 ||
+            strstr(fake.sent, "\"offset\":6") == NULL) {
+            fprintf(stderr, "midstream failure was not detected\n");
+            return 31;
+        }
+        fake.next_reply = NULL;
+        file = fopen(path, "rb");
+        if (file == NULL) return 32;
+        if (fread(existing, 1, 8, file) != 8 || fclose(file) != 0 ||
+            memcmp(existing, "original", 8) != 0 || total != 777) return 33;
+        file = fopen(partial, "rb");
+        if (file != NULL) {
+            fclose(file);
+            fprintf(stderr, "midstream partial file was not removed\n");
+            return 34;
         }
         remove(path);
     }
