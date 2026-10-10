@@ -266,7 +266,8 @@ int main(void)
         if (file == NULL) return 38;
         if (fread(result, 1, sizeof(result), file) != sizeof(result) ||
             fclose(file) != 0 ||
-            result[0] != 0x89 || result[1] != 'P' || result[2] != 'N' || result[3] != 'G' ||\n            result[4] != 0x0d || result[5] != 0x0a || result[6] != 'N' || result[7] != 'G' != 0) {
+            result[0] != 0x89 || result[1] != 'P' || result[2] != 'N' || result[3] != 'G' ||
+            result[4] != 0x0d || result[5] != 0x0a || result[6] != 'N' || result[7] != 'G') {
             fprintf(stderr, "published file content mismatch\n");
             return 39;
         }
