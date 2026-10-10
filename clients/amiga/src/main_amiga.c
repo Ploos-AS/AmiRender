@@ -75,33 +75,41 @@ static int download_file(
     size_t *total_size)
 {
     FILE *file;
+    char temporary[ASSET_SIZE];
+    int name_length;
     unsigned char buffer[CHUNK_SIZE];
     size_t offset = 0, count;
     int eof = 0;
 
-    file = fopen(path, "wb");
+    name_length = snprintf(temporary, sizeof(temporary), "%s.part", path);
+    if (name_length < 0 || (size_t)name_length >= sizeof(temporary)) return -1;
+    file = fopen(temporary, "wb");
     if (file == NULL) return -1;
     while (!eof) {
         if (amirender_download_chunk(
                 transport, asset, offset, buffer, sizeof(buffer), &count, &eof) != 0) {
             fclose(file);
-            remove(path);
+            remove(temporary);
             return -1;
         }
         if (count > 0 && fwrite(buffer, 1, count, file) != count) {
             fclose(file);
-            remove(path);
+            remove(temporary);
             return -1;
         }
         offset += count;
         if (count == 0 && !eof) {
             fclose(file);
-            remove(path);
+            remove(temporary);
             return -1;
         }
     }
     if (fclose(file) != 0) {
-        remove(path);
+        remove(temporary);
+        return -1;
+    }
+    if (rename(temporary, path) != 0) {
+        remove(temporary);
         return -1;
     }
     *total_size = offset;
