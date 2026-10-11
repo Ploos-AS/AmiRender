@@ -279,5 +279,38 @@ int main(void)
         }
         remove(path);
     }
+    {
+        const char *path = "amirender-invalid-test.bin";
+        const char *partial = "amirender-invalid-test.bin.part";
+        const char *invalid[] = {
+            "{\"type\":\"DATA\",\"data\":\"%%%?\",\"eof\":true}",
+            "{\"type\":\"DATA\",\"data\":\"\",\"eof\":false}",
+            "{\"type\":\"DATA\",\"eof\":false}",
+            "{\"type\":\"FAILED\",\"error\":\"disconnected\"}"
+        };
+        size_t case_index;
+        for (case_index = 0; case_index < sizeof(invalid) / sizeof(invalid[0]); ++case_index) {
+            FILE *file = fopen(path, "wb");
+            char existing[8] = {0};
+            size_t total = 123;
+            if (file == NULL) return 41;
+            if (fwrite("original", 1, 8, file) != 8 || fclose(file) != 0) return 42;
+            fake.reply = invalid[case_index];
+            fake.next_reply = NULL;
+            fake.receive_count = 0;
+            if (amirender_download_file(&transport, "asset-invalid", path, &total) == 0 ||
+                total != 123) return 43;
+            file = fopen(path, "rb");
+            if (file == NULL) return 44;
+            if (fread(existing, 1, 8, file) != 8 || fclose(file) != 0 ||
+                memcmp(existing, "original", 8) != 0) return 45;
+            file = fopen(partial, "rb");
+            if (file != NULL) {
+                fclose(file);
+                return 46;
+            }
+        }
+        remove(path);
+    }
     return 0;
 }
