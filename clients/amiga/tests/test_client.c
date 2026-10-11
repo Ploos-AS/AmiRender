@@ -284,6 +284,10 @@ int main(void)
         const char *partial = "amirender-invalid-test.bin.part";
         const char *invalid[] = {
             "{\"type\":\"DATA\",\"data\":\"%%%?\",\"eof\":true}",
+            "{\"type\":\"DATA\",\"data\":\"QQ=A\",\"eof\":true}",
+            "{\"type\":\"DATA\",\"data\":\"QQ==QQ==\",\"eof\":true}",
+            "{\"type\":\"DATA\",\"data\":\"QR==\",\"eof\":true}",
+            "{\"type\":\"DATA\",\"data\":\"QUJ=\",\"eof\":true}",
             "{\"type\":\"DATA\",\"data\":\"\",\"eof\":false}",
             "{\"type\":\"DATA\",\"eof\":false}",
             "{\"type\":\"FAILED\",\"error\":\"disconnected\"}"
