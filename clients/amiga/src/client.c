@@ -242,6 +242,7 @@ int amirender_download_chunk(
     char reply[3584];
     const char *key = "\"data\":\"";
     const char *p, *end;
+    int is_eof;
     size_t out = 0;
     int n, received;
     if (transport == NULL || transport->send == NULL || transport->receive == NULL ||
@@ -257,9 +258,12 @@ int amirender_download_chunk(
     if (received <= 0 || (size_t)received >= sizeof(reply)) return -1;
     reply[received] = '\0';
     if (strstr(reply, "\"type\":\"DATA\"") == NULL) return -1;
+    if (strstr(reply, "\"eof\":true") != NULL) is_eof = 1;
+    else if (strstr(reply, "\"eof\":false") != NULL) is_eof = 0;
+    else return -1;
     p = strstr(reply, key);
     if (p == NULL) {
-        if (strstr(reply, "\"eof\":true") != NULL) {
+        if (is_eof) {
             *received_size = 0; *eof = 1; return 0;
         }
         return -1;
@@ -288,7 +292,7 @@ int amirender_download_chunk(
         p += 4;
     }
     *received_size = out;
-    *eof = strstr(reply, "\"eof\":true") != NULL;
+    *eof = is_eof;
     return 0;
 }
 
