@@ -290,6 +290,9 @@ int main(void)
             "{\"type\":\"DATA\",\"data\":\"QUJ=\",\"eof\":true}",
             "{\"type\":\"DATA\",\"data\":\"\",\"eof\":false}",
             "{\"type\":\"DATA\",\"data\":\"\",\"eof\":true}",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\"}",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":null}",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":1}",
             "{\"type\":\"DATA\",\"eof\":true}",
             "{\"type\":\"DATA\",\"eof\":false}",
             "{\"type\":\"FAILED\",\"error\":\"disconnected\"}"
