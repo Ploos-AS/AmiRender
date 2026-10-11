@@ -381,7 +381,7 @@ int amirender_download_file(
             return -1;
         }
         offset += count;
-        if (count == 0 && !eof) {
+        if (count == 0 && (!eof || offset == 0)) {
             fclose(file);
             remove(temporary);
             return -1;
