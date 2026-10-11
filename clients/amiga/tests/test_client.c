@@ -289,6 +289,8 @@ int main(void)
             "{\"type\":\"DATA\",\"data\":\"QR==\",\"eof\":true}",
             "{\"type\":\"DATA\",\"data\":\"QUJ=\",\"eof\":true}",
             "{\"type\":\"DATA\",\"data\":\"\",\"eof\":false}",
+            "{\"type\":\"DATA\",\"data\":\"\",\"eof\":true}",
+            "{\"type\":\"DATA\",\"eof\":true}",
             "{\"type\":\"DATA\",\"eof\":false}",
             "{\"type\":\"FAILED\",\"error\":\"disconnected\"}"
         };
