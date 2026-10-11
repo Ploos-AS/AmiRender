@@ -275,6 +275,10 @@ int amirender_download_chunk(
         d = p[2] == '=' ? 0 : base64_value(p[2]);
         e = p[3] == '=' ? 0 : base64_value(p[3]);
         if (a < 0 || b < 0 || d < 0 || e < 0) return -1;
+        if (p[2] == '=' && p[3] != '=') return -1;
+        if ((p[2] == '=' || p[3] == '=') && p + 4 != end) return -1;
+        if (p[2] == '=' && (b & 15) != 0) return -1;
+        if (p[3] == '=' && p[2] != '=' && (d & 3) != 0) return -1;
         v = ((unsigned int)a << 18) | ((unsigned int)b << 12) |
             ((unsigned int)d << 6) | (unsigned int)e;
         if (out >= data_size) return -1;
