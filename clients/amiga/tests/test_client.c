@@ -303,7 +303,11 @@ int main(void)
             fake.next_reply = NULL;
             fake.receive_count = 0;
             if (amirender_download_file(&transport, "asset-invalid", path, &total) == 0 ||
-                total != 123) return 43;
+                total != 123) {
+                fprintf(stderr, "invalid download case %lu unexpectedly succeeded: %s\n",
+                    (unsigned long)case_index, invalid[case_index]);
+                return 43;
+            }
             file = fopen(path, "rb");
             if (file == NULL) return 44;
             if (fread(existing, 1, 8, file) != 8 || fclose(file) != 0 ||
