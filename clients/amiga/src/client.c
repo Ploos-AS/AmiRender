@@ -258,9 +258,15 @@ int amirender_download_chunk(
     if (received <= 0 || (size_t)received >= sizeof(reply)) return -1;
     reply[received] = '\0';
     if (strstr(reply, "\"type\":\"DATA\"") == NULL) return -1;
-    if (strstr(reply, "\"eof\":true") != NULL) is_eof = 1;
-    else if (strstr(reply, "\"eof\":false") != NULL) is_eof = 0;
-    else return -1;
+    {
+        const char *eof_true = strstr(reply, "\"eof\":true");
+        const char *eof_false = strstr(reply, "\"eof\":false");
+        const char *first = strstr(reply, "\"eof\":");
+        if ((eof_true == NULL) == (eof_false == NULL)) return -1;
+        if (first != (eof_true != NULL ? eof_true : eof_false)) return -1;
+        if (strstr(first + 6, "\"eof\":") != NULL) return -1;
+        is_eof = eof_true != NULL;
+    }
     p = strstr(reply, key);
     if (p == NULL) {
         if (is_eof) {
