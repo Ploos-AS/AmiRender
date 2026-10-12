@@ -234,14 +234,42 @@ int amirender_upload_end(
     return strstr(reply, "\"type\":\"STAGED\"") != NULL ? 0 : -1;
 }
 
+/* Return a top-level JSON field, ignoring quoted string contents. */
+static const char *json_field(const char *json, const char *key, int *matches)
+{
+    const char *p = json;
+    const char *found = NULL;
+    size_t len = strlen(key);
+    int depth = 0, quoted = 0, escaped = 0;
+    *matches = 0;
+    while (*p) {
+        if (quoted) {
+            if (escaped) escaped = 0;
+            else if (*p == '\\') escaped = 1;
+            else if (*p == '"') quoted = 0;
+        } else if (*p == '{') ++depth;
+        else if (*p == '}') --depth;
+        else if (*p == '"' && depth == 1) {
+            if (strncmp(p + 1, key, len) == 0 &&
+                p[len + 1] == '"' && p[len + 2] == ':') {
+                found = p + len + 3;
+                ++*matches;
+            }
+            quoted = 1;
+        } else if (*p == '"') quoted = 1;
+        ++p;
+    }
+    return depth == 0 && !quoted ? found : NULL;
+}
+
 int amirender_download_chunk(
     struct amirender_transport *transport, const char *asset, size_t offset,
     unsigned char *data, size_t data_size, size_t *received_size, int *eof)
 {
     char request[1200];
     char reply[3584];
-    const char *key = "\"data\":\"";
-    const char *p, *end;
+    const char *p, *end, *field;
+    int matches;
     int is_eof;
     size_t out = 0;
     int n, received;
@@ -257,24 +285,26 @@ int amirender_download_chunk(
     received = transport->receive(transport->context, reply, sizeof(reply) - 1);
     if (received <= 0 || (size_t)received >= sizeof(reply)) return -1;
     reply[received] = '\0';
-    if (strstr(reply, "\"type\":\"DATA\"") == NULL) return -1;
-    {
-        const char *eof_true = strstr(reply, "\"eof\":true");
-        const char *eof_false = strstr(reply, "\"eof\":false");
-        const char *first = strstr(reply, "\"eof\":");
-        if ((eof_true == NULL) == (eof_false == NULL)) return -1;
-        if (first != (eof_true != NULL ? eof_true : eof_false)) return -1;
-        if (strstr(first + 6, "\"eof\":") != NULL) return -1;
-        is_eof = eof_true != NULL;
-    }
-    p = strstr(reply, key);
-    if (p == NULL) {
-        if (is_eof) {
+    field = json_field(reply, "type", &matches);
+    if (matches != 1 || field == NULL ||
+        strncmp(field, "\"DATA\"", 6) != 0) return -1;
+    field = json_field(reply, "eof", &matches);
+    if (matches != 1 || field == NULL) return -1;
+    if (strncmp(field, "true", 4) == 0 &&
+        (field[4] == ',' || field[4] == '}' || field[4] == ' ')) is_eof = 1;
+    else if (strncmp(field, "false", 5) == 0 &&
+        (field[5] == ',' || field[5] == '}' || field[5] == ' ')) is_eof = 0;
+    else return -1;
+    field = json_field(reply, "data", &matches);
+    if (matches > 1) return -1;
+    if (field == NULL) {
+        if (matches == 0 && is_eof) {
             *received_size = 0; *eof = 1; return 0;
         }
         return -1;
     }
-    p += strlen(key);
+    if (*field != '"') return -1;
+    p = field + 1;
     end = strchr(p, '"');
     if (end == NULL) return -1;
     while (p < end) {
