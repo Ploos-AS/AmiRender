@@ -183,6 +183,14 @@ int main(void)
             fprintf(stderr, "final opaque download chunk failed\n");
             return 21;
         }
+        fake.reply = "{\"type\":\"DATA\",\"note\":\"escaped \\\"eof\\\":false and \\\"type\\\":\\\"FAILED\\\"\",\"data\":\"Tkc=\",\"eof\":true}";
+        if (amirender_download_chunk(&transport, "asset-rendered", 6,
+                downloaded, sizeof(downloaded), &count, &eof) != 0 ||
+            count != 2 || eof != 1 ||
+            downloaded[0] != 'N' || downloaded[1] != 'G') {
+            fprintf(stderr, "escaped metadata must not shadow protocol fields\n");
+            return 44;
+        }
         fake.reply = "{\"type\":\"DATA\",\"eof\":true}";
         if (amirender_download_chunk(&transport, "asset-rendered", 8,
                 downloaded, sizeof(downloaded), &count, &eof) != 0 ||
