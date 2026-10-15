@@ -312,6 +312,10 @@ int main(void)
             "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true,\"note\":\"bad \\q escape\"}",
             "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true,\"note\":\"bad \\u12G4 escape\"}",
             "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true,\"note\":\"bad \\u123 escape\"}",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true}}",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true}junk",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true}{\"x\":1}",
+            "garbage{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true}",
             "{\"type\":\"DATA\",\"eof\":true}",
             "{\"type\":\"DATA\",\"eof\":false}",
             "{\"type\":\"FAILED\",\"error\":\"disconnected\"}"
