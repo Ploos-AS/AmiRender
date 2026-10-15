@@ -309,6 +309,9 @@ int main(void)
             "{\"type\":\"DATA\",\"data\":\"QQ==\",\"data\":\"QQ==\",\"eof\":true}",
             "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true",
             "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true,\"note\":\"unterminated}",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true,\"note\":\"bad \\q escape\"}",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true,\"note\":\"bad \\u12G4 escape\"}",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true,\"note\":\"bad \\u123 escape\"}",
             "{\"type\":\"DATA\",\"eof\":true}",
             "{\"type\":\"DATA\",\"eof\":false}",
             "{\"type\":\"FAILED\",\"error\":\"disconnected\"}"
