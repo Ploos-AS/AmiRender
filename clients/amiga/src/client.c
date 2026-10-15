@@ -240,9 +240,15 @@ static const char *json_field(const char *json, const char *key, int *matches)
     const char *p = json;
     const char *found = NULL;
     size_t len = strlen(key);
-    int depth = 0, quoted = 0, escaped = 0;
+    int depth = 0, quoted = 0, escaped = 0, closed = 0;
     *matches = 0;
+    if (*p != '{') return NULL;
     while (*p) {
+        if (closed) {
+            if (*p != ' ' && *p != '\\n' && *p != '\\r' && *p != '\\t') return NULL;
+            ++p;
+            continue;
+        }
         if (quoted) {
             if (escaped) {
                 if (*p == 'u') {
@@ -263,7 +269,10 @@ static const char *json_field(const char *json, const char *key, int *matches)
             else if ((unsigned char)*p < 0x20) return NULL;
             else if (*p == '"') quoted = 0;
         } else if (*p == '{') ++depth;
-        else if (*p == '}') --depth;
+        else if (*p == '}') {
+            if (--depth < 0) return NULL;
+            if (depth == 0) closed = 1;
+        }
         else if (*p == '"' && depth == 1) {
             if (strncmp(p + 1, key, len) == 0 &&
                 p[len + 1] == '"' && p[len + 2] == ':') {
@@ -274,7 +283,7 @@ static const char *json_field(const char *json, const char *key, int *matches)
         } else if (*p == '"') quoted = 1;
         ++p;
     }
-    return depth == 0 && !quoted ? found : NULL;
+    return closed && depth == 0 && !quoted ? found : NULL;
 }
 
 int amirender_download_chunk(
