@@ -244,8 +244,23 @@ static const char *json_field(const char *json, const char *key, int *matches)
     *matches = 0;
     while (*p) {
         if (quoted) {
-            if (escaped) escaped = 0;
+            if (escaped) {
+                if (*p == 'u') {
+                    int i;
+                    for (i = 1; i <= 4; ++i) {
+                        char h = p[i];
+                        if (!((h >= '0' && h <= '9') ||
+                              (h >= 'a' && h <= 'f') ||
+                              (h >= 'A' && h <= 'F'))) return NULL;
+                    }
+                    p += 4;
+                } else if (*p != '"' && *p != '\\' && *p != '/' &&
+                           *p != 'b' && *p != 'f' && *p != 'n' &&
+                           *p != 'r' && *p != 't') return NULL;
+                escaped = 0;
+            }
             else if (*p == '\\') escaped = 1;
+            else if ((unsigned char)*p < 0x20) return NULL;
             else if (*p == '"') quoted = 0;
         } else if (*p == '{') ++depth;
         else if (*p == '}') --depth;
