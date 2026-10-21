@@ -270,6 +270,11 @@ static const char *json_field(const char *json, const char *key, int *matches)
             else if (*p == '"') quoted = 0;
         } else if (*p == '{') ++depth;
         else if (*p == '}') {
+            const char *previous = p;
+            while (previous > json && (previous[-1] == ' ' ||
+                   previous[-1] == '\n' || previous[-1] == '\r' ||
+                   previous[-1] == '\t')) --previous;
+            if (previous > json && previous[-1] == ',') return NULL;
             if (--depth < 0) return NULL;
             if (depth == 0) closed = 1;
         }
