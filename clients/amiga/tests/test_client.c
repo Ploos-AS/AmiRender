@@ -1,0 +1,357 @@
+#include "amirender_submit.h"
+#include "amirender_transport.h"
+
+#include <stdio.h>
+#include <string.h>
+
+struct fake_transport {
+    char sent[1024];
+    const char *reply;
+    const char *next_reply;
+    int receive_count;
+};
+
+static int fake_send(void *context, const char *data, size_t length)
+{
+    struct fake_transport *fake = (struct fake_transport *)context;
+
+    if (length >= sizeof(fake->sent)) {
+        return -1;
+    }
+    memcpy(fake->sent, data, length);
+    fake->sent[length] = '\0';
+    return (int)length;
+}
+
+static int fake_receive(void *context, char *buffer, size_t size)
+{
+    struct fake_transport *fake = (struct fake_transport *)context;
+    const char *reply = fake->reply;
+    size_t length;
+
+    if (fake->next_reply != NULL && fake->receive_count++ > 0) {
+        reply = fake->next_reply;
+    }
+    length = strlen(reply);
+
+    if (length > size) {
+        return -1;
+    }
+    memcpy(buffer, reply, length);
+    return (int)length;
+}
+
+int main(void)
+{
+    struct fake_transport fake = {{0}, NULL, NULL, 0};
+    struct amirender_transport transport = {&fake, fake_send, fake_receive};
+    struct amirender_job job = {
+        "amiga-0002", "povray", "DH0:Scenes/demo.pov",
+        "RAM:frame.png", 0, 320, 256
+    };
+    char reply[512];
+    char asset[256];
+    unsigned char downloaded[16];
+    size_t downloaded_size = 0;
+    const unsigned char scene[] = "camera {}\n";
+
+    fake.reply = "{\"type\":\"COMPLETE\",\"job_id\":\"amiga-0002\","
+                 "\"engine\":\"povray\",\"output\":\"RAM:frame.png\"}\n";
+    if (amirender_submit_job(&transport, &job, reply, sizeof(reply)) != 0) {
+        return 1;
+    }
+    if (strstr(fake.sent, "\"id\":\"amiga-0002\"") == NULL) {
+        fprintf(stderr, "job id missing from request\n");
+        return 2;
+    }
+    if (strstr(reply, "\"type\":\"COMPLETE\"") == NULL) {
+        fprintf(stderr, "completion missing from reply\n");
+        return 3;
+    }
+
+    fake.reply = "{\"type\":\"STAGED\",\"asset\":\"/tmp/amirender/scene.pov\"}\n";
+    if (amirender_upload_asset(
+            &transport, "scene.pov", scene, sizeof(scene) - 1, asset, sizeof(asset)) != 0) {
+        return 4;
+    }
+    if (strcmp(asset, "/tmp/amirender/scene.pov") != 0) {
+        fprintf(stderr, "unexpected staged asset: %s\n", asset);
+        return 5;
+    }
+    if (strstr(fake.sent, "\"type\":\"UPLOAD\"") == NULL ||
+        strstr(fake.sent, "Y2FtZXJhIHt9Cg==") == NULL) {
+        fprintf(stderr, "upload request missing expected payload\n");
+        return 6;
+    }
+
+    fake.reply = "{\"type\":\"FAILED\",\"error\":\"staging failed\"}\n";
+    if (amirender_upload_asset(
+            &transport, "scene.pov", scene, sizeof(scene) - 1, asset, sizeof(asset)) == 0) {
+        return 7;
+    }
+
+    fake.reply = "{\"type\":\"DATA\",\"asset\":\"/tmp/amirender-asset-x/frame.png\","
+                 "\"data\":\"iVBORw0K\"}\n";
+    if (amirender_download_asset(
+            &transport, "/tmp/amirender-asset-x/frame.png",
+            downloaded, sizeof(downloaded), &downloaded_size) != 0) {
+        return 8;
+    }
+    if (downloaded_size != 6 ||
+        downloaded[0] != 0x89 || downloaded[1] != 'P' ||
+        downloaded[2] != 'N' || downloaded[3] != 'G' ||
+        downloaded[4] != 0x0d || downloaded[5] != 0x0a) {
+        fprintf(stderr, "downloaded data mismatch\n");
+        return 9;
+    }
+    if (strstr(fake.sent, "\"type\":\"DOWNLOAD\"") == NULL) {
+        fprintf(stderr, "download request missing\n");
+        return 10;
+    }
+
+    fake.reply = "{\"type\":\"FAILED\",\"error\":\"asset unavailable\"}\n";
+    if (amirender_download_asset(
+            &transport, "/tmp/amirender-asset-x/frame.png",
+            downloaded, sizeof(downloaded), &downloaded_size) == 0) {
+        return 11;
+    }
+    fake.reply = "{\"type\":\"COMPLETE\",\"output\":\"/tmp/old.png\",\"asset_id\":\"asset-new\"}";
+    if (amirender_extract_output_asset(fake.reply, asset, sizeof(asset)) != 0 ||
+        strcmp(asset, "asset-new") != 0) {
+        fprintf(stderr, "opaque asset ID not preferred\n");
+        return 12;
+    }
+    fake.reply = "{\"type\":\"COMPLETE\",\"output\":\"/tmp/old.png\"}";
+    if (amirender_extract_output_asset(fake.reply, asset, sizeof(asset)) != 0 ||
+        strcmp(asset, "/tmp/old.png") != 0) {
+        fprintf(stderr, "legacy output fallback failed\n");
+        return 13;
+    }
+    fake.reply = "{\"type\":\"COMPLETE\",\"output\":\"/tmp/old.png\",\"asset_id\":\"\"}";
+    if (amirender_extract_output_asset(fake.reply, asset, sizeof(asset)) != 0 ||
+        strcmp(asset, "/tmp/old.png") != 0) {
+        fprintf(stderr, "empty asset ID fallback failed\n");
+        return 14;
+    }
+    fake.reply = "{\"type\":\"STAGING\",\"id\":\"asset-opaque\",\"asset\":\"/tmp/scene.pov\"}";
+    if (amirender_upload_begin(&transport, "scene.pov", 10, asset, sizeof(asset)) != 0 ||
+        strcmp(asset, "asset-opaque") != 0) {
+        fprintf(stderr, "opaque upload ID not preferred\n");
+        return 15;
+    }
+    fake.reply = "{\"type\":\"STAGING\",\"asset\":\"/tmp/scene.pov\"}";
+    if (amirender_upload_begin(&transport, "scene.pov", 10, asset, sizeof(asset)) != 0 ||
+        strcmp(asset, "/tmp/scene.pov") != 0) {
+        fprintf(stderr, "legacy upload asset fallback failed\n");
+        return 16;
+    }
+    fake.reply = "{\"type\":\"STAGING\",\"id\":\"asset-roundtrip\",\"asset\":\"/tmp/scene.pov\"}";
+    if (amirender_upload_begin(&transport, "scene.pov", 10, asset, sizeof(asset)) != 0 ||
+        strcmp(asset, "asset-roundtrip") != 0) return 17;
+    fake.reply = "{\"type\":\"CHUNKED\",\"offset\":10}";
+    if (amirender_upload_chunk(&transport, asset, 0, scene, sizeof(scene) - 1) != 0 ||
+        strstr(fake.sent, "\"asset\":\"asset-roundtrip\"") == NULL) {
+        fprintf(stderr, "upload chunk did not use opaque ID\n");
+        return 18;
+    }
+    fake.reply = "{\"type\":\"STAGED\"}";
+    if (amirender_upload_end(&transport, asset, 10) != 0 ||
+        strstr(fake.sent, "\"asset\":\"asset-roundtrip\"") == NULL) {
+        fprintf(stderr, "upload end did not use opaque ID\n");
+        return 19;
+    }
+    {
+        int eof = 0;
+        size_t count = 0;
+        fake.reply = "{\"type\":\"DATA\",\"data\":\"iVBORw0K\",\"eof\":false}";
+        if (amirender_download_chunk(&transport, "asset-rendered", 0,
+                downloaded, sizeof(downloaded), &count, &eof) != 0 ||
+            count != 6 || eof != 0 ||
+            strstr(fake.sent, "\"asset\":\"asset-rendered\"") == NULL ||
+            strstr(fake.sent, "\"offset\":0") == NULL ||
+            downloaded[0] != 0x89 || downloaded[1] != 'P') {
+            fprintf(stderr, "first opaque download chunk failed\n");
+            return 20;
+        }
+        fake.reply = "{\"type\":\"DATA\",\"data\":\"Tkc=\",\"eof\":true}";
+        if (amirender_download_chunk(&transport, "asset-rendered", 6,
+                downloaded, sizeof(downloaded), &count, &eof) != 0 ||
+            count != 2 || eof != 1 ||
+            strstr(fake.sent, "\"asset\":\"asset-rendered\"") == NULL ||
+            strstr(fake.sent, "\"offset\":6") == NULL ||
+            downloaded[0] != 'N' || downloaded[1] != 'G') {
+            fprintf(stderr, "final opaque download chunk failed\n");
+            return 21;
+        }
+        fake.reply = "{\"type\":\"DATA\",\"note\":\"escaped \\\"eof\\\":false and \\\"type\\\":\\\"FAILED\\\"\",\"data\":\"Tkc=\",\"eof\":true}";
+        if (amirender_download_chunk(&transport, "asset-rendered", 6,
+                downloaded, sizeof(downloaded), &count, &eof) != 0 ||
+            count != 2 || eof != 1 ||
+            downloaded[0] != 'N' || downloaded[1] != 'G') {
+            fprintf(stderr, "escaped metadata must not shadow protocol fields\n");
+            return 44;
+        }
+        fake.reply = "{\"type\":\"DATA\",\"eof\":true}";
+        if (amirender_download_chunk(&transport, "asset-rendered", 8,
+                downloaded, sizeof(downloaded), &count, &eof) != 0 ||
+            count != 0 || eof != 1) {
+            fprintf(stderr, "empty EOF response failed\n");
+            return 22;
+        }
+    }
+    {
+        const char *path = "amirender-download-test.bin";
+        const char *partial = "amirender-download-test.bin.part";
+        FILE *file = fopen(path, "wb");
+        size_t total = 999;
+        char existing[16] = {0};
+        if (file == NULL) return 23;
+        if (fwrite("original", 1, 8, file) != 8 || fclose(file) != 0) return 24;
+        fake.reply = "{\"type\":\"FAILED\",\"error\":\"interrupted\"}";
+        if (amirender_download_file(&transport, "asset-interrupted", path, &total) == 0) return 25;
+        file = fopen(path, "rb");
+        if (file == NULL) return 26;
+        if (fread(existing, 1, 8, file) != 8 || fclose(file) != 0 ||
+            memcmp(existing, "original", 8) != 0 || total != 999) return 27;
+        file = fopen(partial, "rb");
+        if (file != NULL) {
+            fclose(file);
+            fprintf(stderr, "partial download was not removed\n");
+            return 28;
+        }
+        remove(path);
+    }
+    {
+        const char *path = "amirender-midstream-test.bin";
+        const char *partial = "amirender-midstream-test.bin.part";
+        FILE *file = fopen(path, "wb");
+        size_t total = 777;
+        char existing[16] = {0};
+        if (file == NULL) return 29;
+        if (fwrite("original", 1, 8, file) != 8 || fclose(file) != 0) return 30;
+        fake.reply = "{\"type\":\"DATA\",\"data\":\"iVBORw0K\",\"eof\":false}";
+        fake.next_reply = "{\"type\":\"FAILED\",\"error\":\"connection lost\"}";
+        fake.receive_count = 0;
+        if (amirender_download_file(&transport, "asset-midstream", path, &total) == 0 ||
+            fake.receive_count != 2 ||
+            strstr(fake.sent, "\"offset\":6") == NULL) {
+            fprintf(stderr, "midstream failure was not detected\n");
+            return 31;
+        }
+        fake.next_reply = NULL;
+        file = fopen(path, "rb");
+        if (file == NULL) return 32;
+        if (fread(existing, 1, 8, file) != 8 || fclose(file) != 0 ||
+            memcmp(existing, "original", 8) != 0 || total != 777) return 33;
+        file = fopen(partial, "rb");
+        if (file != NULL) {
+            fclose(file);
+            fprintf(stderr, "midstream partial file was not removed\n");
+            return 34;
+        }
+        remove(path);
+    }
+    {
+        const char *path = "amirender-complete-test.bin";
+        const char *partial = "amirender-complete-test.bin.part";
+        FILE *file = fopen(path, "wb");
+        size_t total = 0;
+        unsigned char result[8] = {0};
+        if (file == NULL) return 35;
+        if (fwrite("original", 1, 8, file) != 8 || fclose(file) != 0) return 36;
+        fake.reply = "{\"type\":\"DATA\",\"data\":\"iVBORw0K\",\"eof\":false}";
+        fake.next_reply = "{\"type\":\"DATA\",\"data\":\"Tkc=\",\"eof\":true}";
+        fake.receive_count = 0;
+        if (amirender_download_file(&transport, "asset-complete", path, &total) != 0 ||
+            total != 8 || fake.receive_count != 2 ||
+            strstr(fake.sent, "\"asset\":\"asset-complete\"") == NULL ||
+            strstr(fake.sent, "\"offset\":6") == NULL) {
+            fprintf(stderr, "multi-chunk download did not complete\n");
+            return 37;
+        }
+        fake.next_reply = NULL;
+        file = fopen(path, "rb");
+        if (file == NULL) return 38;
+        if (fread(result, 1, sizeof(result), file) != sizeof(result) ||
+            fclose(file) != 0 ||
+            result[0] != 0x89 || result[1] != 'P' || result[2] != 'N' || result[3] != 'G' ||
+            result[4] != 0x0d || result[5] != 0x0a || result[6] != 'N' || result[7] != 'G') {
+            fprintf(stderr, "published file content mismatch\n");
+            return 39;
+        }
+        file = fopen(partial, "rb");
+        if (file != NULL) {
+            fclose(file);
+            fprintf(stderr, "partial file remains after success\n");
+            return 40;
+        }
+        remove(path);
+    }
+    {
+        const char *path = "amirender-invalid-test.bin";
+        const char *partial = "amirender-invalid-test.bin.part";
+        const char *invalid[] = {
+            "{\"type\":\"DATA\",\"data\":\"%%%?\",\"eof\":true}",
+            "{\"type\":\"DATA\",\"data\":\"QQ=A\",\"eof\":true}",
+            "{\"type\":\"DATA\",\"data\":\"QQ==QQ==\",\"eof\":true}",
+            "{\"type\":\"DATA\",\"data\":\"QR==\",\"eof\":true}",
+            "{\"type\":\"DATA\",\"data\":\"QUJ=\",\"eof\":true}",
+            "{\"type\":\"DATA\",\"data\":\"\",\"eof\":false}",
+            "{\"type\":\"DATA\",\"data\":\"\",\"eof\":true}",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\"}",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":null}",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":1}",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true,\"eof\":false}",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":false,\"eof\":false}",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":null,\"eof\":true}",
+            "{\"type\":\"DATA\",\"note\":\"\\\"eof\\\":true\",\"data\":\"QQ==\"}",
+            "{\"type\":\"FAILED\",\"note\":\"\\\"type\\\":\\\"DATA\\\"\",\"data\":\"QQ==\",\"eof\":true}",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\",\"data\":\"QQ==\",\"eof\":true}",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true,\"note\":\"unterminated}",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true,\"note\":\"bad \\q escape\"}",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true,\"note\":\"bad \\u12G4 escape\"}",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true,\"note\":\"bad \\u123 escape\"}",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true}}",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true}junk",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true}{\"x\":1}",
+            "garbage{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true}",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true,}",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true,   }",
+            "{\"type\":\"DATA\" \"data\":\"QQ==\",\"eof\":true}",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\" \"eof\":true}",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true \"note\":\"extra\"}",
+            "{\"type\":\"DATA\",\"eof\":true}",
+            "{\"type\":\"DATA\",\"eof\":false}",
+            "{\"type\":\"FAILED\",\"error\":\"disconnected\"}"
+        };
+        size_t case_index;
+        for (case_index = 0; case_index < sizeof(invalid) / sizeof(invalid[0]); ++case_index) {
+            FILE *file = fopen(path, "wb");
+            char existing[8] = {0};
+            size_t total = 123;
+            if (file == NULL) return 41;
+            if (fwrite("original", 1, 8, file) != 8 || fclose(file) != 0) return 42;
+            fake.reply = invalid[case_index];
+            fake.next_reply = NULL;
+            fake.receive_count = 0;
+            if (amirender_download_file(&transport, "asset-invalid", path, &total) == 0 ||
+                total != 123) {
+                fprintf(stderr, "invalid download case %lu unexpectedly succeeded: %s\n",
+                    (unsigned long)case_index, invalid[case_index]);
+                return 43;
+            }
+            file = fopen(path, "rb");
+            if (file == NULL) return 44;
+            if (fread(existing, 1, 8, file) != 8 || fclose(file) != 0 ||
+                memcmp(existing, "original", 8) != 0) return 45;
+            file = fopen(partial, "rb");
+            if (file != NULL) {
+                fclose(file);
+                return 46;
+            }
+        }
+        remove(path);
+    }
+    return 0;
+}

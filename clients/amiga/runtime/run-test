@@ -1,0 +1,14 @@
+; AmiRender M1 classic runtime smoke test
+; The client is intentionally invoked without arguments.
+; Exit code 20 proves the m68k executable reached its CLI validation path.
+
+C:amirender >T:amirender-cli.out
+SET rc $RC
+
+ECHO "AMIRENDER_USAGE_RC=$rc" >T:amirender.log
+
+IF $rc EQ 20
+  ECHO "AMIRENDER_EXEC=PASS" >>T:amirender.log
+ELSE
+  ECHO "AMIRENDER_EXEC=FAIL" >>T:amirender.log
+ENDIF

@@ -2,17 +2,28 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "AmiRender Node",
   "type": "object",
-  "required": ["version", "id", "arch", "engines"],
+  "required": ["version", "id", "arch", "capabilities"],
   "properties": {
     "version": { "type": "integer", "const": 1 },
     "id": { "type": "string", "minLength": 1 },
     "arch": { "type": "string", "enum": ["m68k", "arm64", "amd64"] },
     "os": { "type": "string" },
     "memory_mb": { "type": "integer", "minimum": 1 },
-    "engines": {
+    "capabilities": {
       "type": "array",
-      "items": { "type": "string", "minLength": 1 },
-      "uniqueItems": true
+      "items": {
+        "type": "object",
+        "required": ["engine"],
+        "properties": {
+          "engine": { "type": "string", "minLength": 1 },
+          "modes": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false
+      }
     }
   },
   "additionalProperties": false
