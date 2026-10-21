@@ -279,6 +279,12 @@ static const char *json_field(const char *json, const char *key, int *matches)
             if (depth == 0) closed = 1;
         }
         else if (*p == '"' && depth == 1) {
+            const char *previous = p;
+            while (previous > json && (previous[-1] == ' ' ||
+                   previous[-1] == '\n' || previous[-1] == '\r' ||
+                   previous[-1] == '\t')) --previous;
+            if (previous > json + 1 && previous[-1] != ',' &&
+                previous[-1] != ':' && previous[-1] != '{') return NULL;
             if (strncmp(p + 1, key, len) == 0 &&
                 p[len + 1] == '"' && p[len + 2] == ':') {
                 found = p + len + 3;
