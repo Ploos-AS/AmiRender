@@ -245,7 +245,7 @@ static const char *json_field(const char *json, const char *key, int *matches)
     if (*p != '{') return NULL;
     while (*p) {
         if (closed) {
-            if (*p != ' ' && *p != '\\n' && *p != '\\r' && *p != '\\t') return NULL;
+            if (*p != ' ' && *p != '\n' && *p != '\r' && *p != '\t') return NULL;
             ++p;
             continue;
         }
