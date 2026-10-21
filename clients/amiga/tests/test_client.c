@@ -318,6 +318,9 @@ int main(void)
             "garbage{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true}",
             "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true,}",
             "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true,   }",
+            "{\"type\":\"DATA\" \"data\":\"QQ==\",\"eof\":true}",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\" \"eof\":true}",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true \"note\":\"extra\"}",
             "{\"type\":\"DATA\",\"eof\":true}",
             "{\"type\":\"DATA\",\"eof\":false}",
             "{\"type\":\"FAILED\",\"error\":\"disconnected\"}"
