@@ -318,6 +318,8 @@ int main(void)
             "garbage{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true}",
             "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true,}",
             "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true,   }",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true,\"x\"}",
+            "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true,\"e\"}",
             "{\"type\":\"DATA\" \"data\":\"QQ==\",\"eof\":true}",
             "{\"type\":\"DATA\",\"data\":\"QQ==\" \"eof\":true}",
             "{\"type\":\"DATA\",\"data\":\"QQ==\",\"eof\":true \"note\":\"extra\"}",
