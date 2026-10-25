@@ -306,9 +306,17 @@ static const char *json_field(const char *json, const char *key, int *matches)
             if ((previous[-1] == '{' || previous[-1] == ',') &&
                 strlen(p + 1) >= len + 2 &&
                 strncmp(p + 1, key, len) == 0 &&
-                p[len + 1] == '"' && p[len + 2] == ':') {
-                found = p + len + 3;
-                ++*matches;
+                p[len + 1] == '"') {
+                const char *value = p + len + 2;
+                while (*value == ' ' || *value == '\n' ||
+                       *value == '\r' || *value == '\t') ++value;
+                if (*value == ':') {
+                    ++value;
+                    while (*value == ' ' || *value == '\n' ||
+                           *value == '\r' || *value == '\t') ++value;
+                    found = value;
+                    ++*matches;
+                }
             }
             if (previous[-1] == '{' || previous[-1] == ',') {
                 const char *colon = strchr(p + 1, '"');
