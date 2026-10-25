@@ -285,7 +285,8 @@ static const char *json_field(const char *json, const char *key, int *matches)
                    previous[-1] == '\t')) --previous;
             if (previous > json + 1 && previous[-1] != ',' &&
                 previous[-1] != ':' && previous[-1] != '{') return NULL;
-            if (strlen(p + 1) >= len + 2 &&
+            if ((previous[-1] == '{' || previous[-1] == ',') &&
+                strlen(p + 1) >= len + 2 &&
                 strncmp(p + 1, key, len) == 0 &&
                 p[len + 1] == '"' && p[len + 2] == ':') {
                 found = p + len + 3;
