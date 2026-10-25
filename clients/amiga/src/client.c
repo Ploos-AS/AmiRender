@@ -298,6 +298,11 @@ static const char *json_field(const char *json, const char *key, int *matches)
                 while (*colon == ' ' || *colon == '\n' ||
                        *colon == '\r' || *colon == '\t') ++colon;
                 if (*colon != ':') return NULL;
+                ++colon;
+                while (*colon == ' ' || *colon == '\n' ||
+                       *colon == '\r' || *colon == '\t') ++colon;
+                if (*colon == '\0' || *colon == ',' || *colon == '}')
+                    return NULL;
             }
             quoted = 1;
         } else if (*p == '"') quoted = 1;
