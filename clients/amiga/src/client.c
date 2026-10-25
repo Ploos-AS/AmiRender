@@ -267,7 +267,25 @@ static const char *json_field(const char *json, const char *key, int *matches)
             }
             else if (*p == '\\') escaped = 1;
             else if ((unsigned char)*p < 0x20) return NULL;
-            else if (*p == '"') quoted = 0;
+            else if (*p == '"') {
+                if (depth == 1) {
+                    const char *next = p + 1;
+                    const char *start = p;
+                    while (*next == ' ' || *next == '\n' ||
+                           *next == '\r' || *next == '\t') ++next;
+                    while (start > json && start[-1] != '"' &&
+                           start[-1] != '{' && start[-1] != ',' &&
+                           start[-1] != ':') --start;
+                    if (*next == ':' && start > json && start[-1] == '"') {
+                        const char *before = start - 1;
+                        while (before > json && (before[-1] == ' ' ||
+                               before[-1] == '\n' || before[-1] == '\r' ||
+                               before[-1] == '\t')) --before;
+                        if (before > json && before[-1] == ':') return NULL;
+                    }
+                }
+                quoted = 0;
+            }
         } else if (*p == '{') ++depth;
         else if (*p == '}') {
             const char *previous = p;
