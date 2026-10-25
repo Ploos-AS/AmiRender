@@ -291,6 +291,14 @@ static const char *json_field(const char *json, const char *key, int *matches)
                 found = p + len + 3;
                 ++*matches;
             }
+            {
+                const char *colon = strchr(p + 1, '"');
+                if (colon == NULL) return NULL;
+                ++colon;
+                while (*colon == ' ' || *colon == '\n' ||
+                       *colon == '\r' || *colon == '\t') ++colon;
+                if (*colon != ':') return NULL;
+            }
             quoted = 1;
         } else if (*p == '"') quoted = 1;
         ++p;
