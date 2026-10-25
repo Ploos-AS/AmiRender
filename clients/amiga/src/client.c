@@ -291,7 +291,7 @@ static const char *json_field(const char *json, const char *key, int *matches)
                 found = p + len + 3;
                 ++*matches;
             }
-            {
+            if (previous[-1] == '{' || previous[-1] == ',') {
                 const char *colon = strchr(p + 1, '"');
                 if (colon == NULL) return NULL;
                 ++colon;
