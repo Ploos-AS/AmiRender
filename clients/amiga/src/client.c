@@ -367,9 +367,11 @@ int amirender_download_chunk(
     field = json_field(reply, "eof", &matches);
     if (matches != 1 || field == NULL) return -1;
     if (strncmp(field, "true", 4) == 0 &&
-        (field[4] == ',' || field[4] == '}' || field[4] == ' ')) is_eof = 1;
+        (field[4] == ',' || field[4] == '}' || field[4] == ' ' ||
+         field[4] == '\n' || field[4] == '\r' || field[4] == '\t')) is_eof = 1;
     else if (strncmp(field, "false", 5) == 0 &&
-        (field[5] == ',' || field[5] == '}' || field[5] == ' ')) is_eof = 0;
+        (field[5] == ',' || field[5] == '}' || field[5] == ' ' ||
+         field[5] == '\n' || field[5] == '\r' || field[5] == '\t')) is_eof = 0;
     else return -1;
     field = json_field(reply, "data", &matches);
     if (matches > 1) return -1;
