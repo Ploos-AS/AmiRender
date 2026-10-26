@@ -181,6 +181,14 @@ int main(void)
             fprintf(stderr, "formatted JSON download chunk failed\n");
             return 47;
         }
+        fake.reply = "{\"type\":\"DATA\",\"metadata\":{\"source\":\"render\",\"tags\":[\"amiga\",1,true,null]},\"data\":\"Tkc=\",\"eof\":true}";
+        if (amirender_download_chunk(&transport, "asset-rendered", 6,
+                downloaded, sizeof(downloaded), &count, &eof) != 0 ||
+            count != 2 || eof != 1 ||
+            downloaded[0] != 'N' || downloaded[1] != 'G') {
+            fprintf(stderr, "nested metadata JSON download chunk failed\n");
+            return 48;
+        }
         fake.reply = "{\"type\":\"DATA\",\"data\":\"Tkc=\",\"eof\":true}";
         if (amirender_download_chunk(&transport, "asset-rendered", 6,
                 downloaded, sizeof(downloaded), &count, &eof) != 0 ||
