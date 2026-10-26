@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "project": "AmiRender",
+  "milestone": "M1-amiga-client",
+  "architecture": "m68k",
+  "cpu": "68000",
+  "os": "AmigaOS",
+  "emulator_profiles": ["a500-os204", "a500plus-os2", "a1200-020-os3"],
+  "payload": {
+    "programs": ["C/amirender"],
+    "script": "S/run-test"
+  },
+  "result": {
+    "logs": ["T/amirender.log"],
+    "required_lines": ["AMIRENDER_EXEC=PASS", "AMIRENDER_USAGE_RC=20"]
+  },
+  "policy": {
+    "roms_in_repository": false,
+    "amigaos_files_in_repository": false
+  },
+  "requirements": {
+    "network": false,
+    "bsdsocket_library": true
+  }
+}

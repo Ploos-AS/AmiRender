@@ -3,14 +3,41 @@ on:
   push:
   pull_request:
 jobs:
-  m0:
+  m1:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: '1.22.x'
-      - run: gofmt -w cmd
+      - name: Install POV-Ray
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y povray
+      - run: gofmt -w cmd internal
       - run: git diff --exit-code
       - run: go test ./...
       - run: go build ./cmd/amirender-node ./cmd/amirender-controller
+      - name: Test portable Amiga client
+        run: |
+          cc -std=c99 -Wall -Wextra -Werror -pedantic \
+            -Iclients/amiga/include \
+            clients/amiga/src/submit.c clients/amiga/tests/test_submit.c \
+            -o build-amiga-client-test
+          ./build-amiga-client-test
+          cc -std=c99 -Wall -Wextra -Werror -pedantic \
+            -Iclients/amiga/include \
+            clients/amiga/src/upload.c clients/amiga/tests/test_upload.c \
+            -o build-amiga-upload-test
+          ./build-amiga-upload-test
+          cc -std=c99 -Wall -Wextra -Werror -pedantic \
+            -Iclients/amiga/include \
+            clients/amiga/src/submit.c clients/amiga/src/upload.c clients/amiga/src/client.c \
+            clients/amiga/tests/test_client.c \
+            -o build-amiga-transport-test
+          ./build-amiga-transport-test
+      - name: Render POV-Ray smoke scene
+        run: |
+          mkdir -p build
+          povray +Itests/scenes/m1-smoke.pov +Obuild/m1-smoke.png +W160 +H120 -D +FN
+          test -s build/m1-smoke.png
