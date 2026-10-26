@@ -235,107 +235,129 @@ int amirender_upload_end(
 }
 
 /* Return a top-level JSON field, ignoring quoted string contents. */
+/* Small, bounded JSON parser for protocol replies (C99, no dependencies). */
+static void json_ws(const char **p)
+{
+    while (**p == ' ' || **p == '\n' || **p == '\r' || **p == '\t') ++*p;
+}
+
+static int json_string(const char **p)
+{
+    if (*(*p)++ != '"') return 0;
+    while (**p && **p != '"') {
+        unsigned char ch = (unsigned char)**p;
+        if (ch < 0x20) return 0;
+        if (ch == '\\') {
+            int i;
+            ++*p;
+            if (**p == 'u') {
+                ++*p;
+                for (i = 0; i < 4; ++i, ++*p) {
+                    char h = **p;
+                    if (!((h >= '0' && h <= '9') ||
+                          (h >= 'a' && h <= 'f') ||
+                          (h >= 'A' && h <= 'F'))) return 0;
+                }
+            } else {
+                if (**p != '"' && **p != '\\' && **p != '/' &&
+                    **p != 'b' && **p != 'f' && **p != 'n' &&
+                    **p != 'r' && **p != 't') return 0;
+                ++*p;
+            }
+        } else ++*p;
+    }
+    if (**p != '"') return 0;
+    ++*p;
+    return 1;
+}
+
+static int json_value(const char **p, int depth)
+{
+    const char *start;
+    if (depth > 16) return 0;
+    json_ws(p);
+    if (**p == '"') return json_string(p);
+    if (**p == '{' || **p == '[') {
+        char close = **p == '{' ? '}' : ']';
+        int object = **p == '{';
+        ++*p;
+        json_ws(p);
+        if (**p == close) { ++*p; return 1; }
+        for (;;) {
+            if (object) {
+                if (!json_string(p)) return 0;
+                json_ws(p);
+                if (**p != ':') return 0;
+                ++*p;
+            }
+            if (!json_value(p, depth + 1)) return 0;
+            json_ws(p);
+            if (**p == close) { ++*p; return 1; }
+            if (**p != ',') return 0;
+            ++*p;
+            json_ws(p);
+            if (**p == close) return 0;
+        }
+    }
+    if (strncmp(*p, "true", 4) == 0) { *p += 4; return 1; }
+    if (strncmp(*p, "false", 5) == 0) { *p += 5; return 1; }
+    if (strncmp(*p, "null", 4) == 0) { *p += 4; return 1; }
+    start = *p;
+    if (**p == '-') ++*p;
+    if (**p == '0') ++*p;
+    else {
+        if (**p < '1' || **p > '9') return 0;
+        do { ++*p; } while (**p >= '0' && **p <= '9');
+    }
+    if (**p == '.') {
+        ++*p;
+        if (**p < '0' || **p > '9') return 0;
+        do { ++*p; } while (**p >= '0' && **p <= '9');
+    }
+    if (**p == 'e' || **p == 'E') {
+        ++*p;
+        if (**p == '+' || **p == '-') ++*p;
+        if (**p < '0' || **p > '9') return 0;
+        do { ++*p; } while (**p >= '0' && **p <= '9');
+    }
+    return *p != start;
+}
+
+/* Return a top-level field only if the entire reply is valid JSON. */
 static const char *json_field(const char *json, const char *key, int *matches)
 {
     const char *p = json;
     const char *found = NULL;
     size_t len = strlen(key);
-    int depth = 0, quoted = 0, escaped = 0, closed = 0;
     *matches = 0;
-    if (*p != '{') return NULL;
-    while (*p) {
-        if (closed) {
-            if (*p != ' ' && *p != '\n' && *p != '\r' && *p != '\t') return NULL;
-            ++p;
-            continue;
+    json_ws(&p);
+    if (*p++ != '{') return NULL;
+    json_ws(&p);
+    if (*p == '}') ++p;
+    else for (;;) {
+        const char *name, *end, *value;
+        if (*p != '"') return NULL;
+        name = p + 1;
+        if (!json_string(&p)) return NULL;
+        end = p - 1;
+        json_ws(&p);
+        if (*p++ != ':') return NULL;
+        json_ws(&p);
+        value = p;
+        if (!json_value(&p, 1)) return NULL;
+        if ((size_t)(end - name) == len &&
+            strncmp(name, key, len) == 0) {
+            found = value;
+            ++*matches;
         }
-        if (quoted) {
-            if (escaped) {
-                if (*p == 'u') {
-                    int i;
-                    for (i = 1; i <= 4; ++i) {
-                        char h = p[i];
-                        if (!((h >= '0' && h <= '9') ||
-                              (h >= 'a' && h <= 'f') ||
-                              (h >= 'A' && h <= 'F'))) return NULL;
-                    }
-                    p += 4;
-                } else if (*p != '"' && *p != '\\' && *p != '/' &&
-                           *p != 'b' && *p != 'f' && *p != 'n' &&
-                           *p != 'r' && *p != 't') return NULL;
-                escaped = 0;
-            }
-            else if (*p == '\\') escaped = 1;
-            else if ((unsigned char)*p < 0x20) return NULL;
-            else if (*p == '"') {
-                if (depth == 1) {
-                    const char *next = p + 1;
-                    const char *start = p;
-                    while (*next == ' ' || *next == '\n' ||
-                           *next == '\r' || *next == '\t') ++next;
-                    while (start > json && start[-1] != '"' &&
-                           start[-1] != '{' && start[-1] != ',' &&
-                           start[-1] != ':') --start;
-                    if (*next == ':' && start > json && start[-1] == '"') {
-                        const char *before = start - 1;
-                        while (before > json && (before[-1] == ' ' ||
-                               before[-1] == '\n' || before[-1] == '\r' ||
-                               before[-1] == '\t')) --before;
-                        if (before > json && before[-1] == ':') return NULL;
-                    }
-                }
-                quoted = 0;
-            }
-        } else if (*p == '{') ++depth;
-        else if (*p == '}') {
-            const char *previous = p;
-            while (previous > json && (previous[-1] == ' ' ||
-                   previous[-1] == '\n' || previous[-1] == '\r' ||
-                   previous[-1] == '\t')) --previous;
-            if (previous > json && previous[-1] == ',') return NULL;
-            if (--depth < 0) return NULL;
-            if (depth == 0) closed = 1;
-        }
-        else if (*p == '"' && depth == 1) {
-            const char *previous = p;
-            while (previous > json && (previous[-1] == ' ' ||
-                   previous[-1] == '\n' || previous[-1] == '\r' ||
-                   previous[-1] == '\t')) --previous;
-            if (previous > json + 1 && previous[-1] != ',' &&
-                previous[-1] != ':' && previous[-1] != '{') return NULL;
-            if ((previous[-1] == '{' || previous[-1] == ',') &&
-                strlen(p + 1) >= len + 2 &&
-                strncmp(p + 1, key, len) == 0 &&
-                p[len + 1] == '"') {
-                const char *value = p + len + 2;
-                while (*value == ' ' || *value == '\n' ||
-                       *value == '\r' || *value == '\t') ++value;
-                if (*value == ':') {
-                    ++value;
-                    while (*value == ' ' || *value == '\n' ||
-                           *value == '\r' || *value == '\t') ++value;
-                    found = value;
-                    ++*matches;
-                }
-            }
-            if (previous[-1] == '{' || previous[-1] == ',') {
-                const char *colon = strchr(p + 1, '"');
-                if (colon == NULL) return NULL;
-                ++colon;
-                while (*colon == ' ' || *colon == '\n' ||
-                       *colon == '\r' || *colon == '\t') ++colon;
-                if (*colon != ':') return NULL;
-                ++colon;
-                while (*colon == ' ' || *colon == '\n' ||
-                       *colon == '\r' || *colon == '\t') ++colon;
-                if (*colon == '\0' || *colon == ',' || *colon == '}')
-                    return NULL;
-            }
-            quoted = 1;
-        } else if (*p == '"') quoted = 1;
-        ++p;
+        json_ws(&p);
+        if (*p == '}') { ++p; break; }
+        if (*p++ != ',') return NULL;
+        json_ws(&p);
+        if (*p == '}') return NULL;
     }
-    return closed && depth == 0 && !quoted ? found : NULL;
+    json_ws(&p);
+    return *p == '\0' ? found : NULL;
 }
 
 int amirender_download_chunk(
