@@ -173,6 +173,14 @@ int main(void)
             fprintf(stderr, "first opaque download chunk failed\n");
             return 20;
         }
+        fake.reply = "{\n  \"type\" : \"DATA\",\n  \"data\" : \"Tkc=\",\n  \"eof\" : true\n}";
+        if (amirender_download_chunk(&transport, "asset-rendered", 6,
+                downloaded, sizeof(downloaded), &count, &eof) != 0 ||
+            count != 2 || eof != 1 ||
+            downloaded[0] != 'N' || downloaded[1] != 'G') {
+            fprintf(stderr, "formatted JSON download chunk failed\n");
+            return 47;
+        }
         fake.reply = "{\"type\":\"DATA\",\"data\":\"Tkc=\",\"eof\":true}";
         if (amirender_download_chunk(&transport, "asset-rendered", 6,
                 downloaded, sizeof(downloaded), &count, &eof) != 0 ||
